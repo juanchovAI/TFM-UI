@@ -1,0 +1,12 @@
+[build]
+  base = "frontend/react-app"
+  command = "npm ci && npm run build"
+  publish = "frontend/react-app/dist"
+
+[context.production.environment]
+  VITE_API_BASE = "https://tfm-1-1sle.onrender.com"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
