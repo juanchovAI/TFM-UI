@@ -1,7 +1,7 @@
 [build]
-  base = "frontend/react-app"
+  base = "."
   command = "npm ci && npm run build"
-  publish = "frontend/react-app/dist"
+  publish = "dist"
 
 [context.production.environment]
   VITE_API_BASE = "https://tfm-1-1sle.onrender.com"
