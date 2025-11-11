@@ -1,6 +1,7 @@
 [build]
   base = "."
-  command = "npm ci && npm run build"
+  # use --ignore-scripts to avoid arbitrary postinstall scripts (e.g. pip installs)
+  command = "npm ci --ignore-scripts && npm run build"
   publish = "dist"
 
 [context.production.environment]
