@@ -3,6 +3,13 @@
   publish = "dist"
   command = "npm run build"
 
+# Proxy API first (order matters)
+[[redirects]]
+  from = "/predict/*"
+  to = "https://tfm-1-1sle.onrender.com/predict/:splat"
+  status = 200
+  force = true
+
 # Optional: Redirect all requests to index.html for SPA routing
 [[redirects]]
   from = "/*"
