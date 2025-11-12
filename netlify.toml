@@ -1,0 +1,14 @@
+[build]
+  base = "TFM-UI"
+  # avoid running arbitrary postinstall scripts that may invoke Python
+  command = "npm ci --ignore-scripts && npm run build"
+  publish = "TFM-UI/dist"
+
+[context.production.environment]
+  # replace with your production API URL or set this in Netlify UI
+  VITE_API_BASE = "https://tfm-1-1sle.onrender.com"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
