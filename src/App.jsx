@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import "./App.css";
+import researchingSvg from "./assets/undraw_researching_49yy.svg";
 
 // Utilidad para mostrar solo los tres más populares y, si se repiten, solo el de mayor probabilidad
 function getTopPopularResults(results) {
@@ -300,27 +301,76 @@ export default function App() {
       <h1 style={{ fontSize: "2.875rem", fontWeight: "bold", color: "white" }}>
         Herramienta inteligente para apoyo a la educación inclusiva
       </h1>
+
       <Card
         style={{
           maxWidth: "56rem",
           background: "white",
           color: "#222",
-          border: "1px solid #e5e7eb",
-          boxShadow: "0 4px 24px 0 rgba(0,0,0,0.08)",
+         boxShadow: "0 4px 24px 0 rgba(0,0,0,0.08)",
           borderRadius: "0.75rem",
         }}
       >
         <CardContent style={{ padding: "2.5rem" }}>
+          <div className="mb-6">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle >
+                  <div style={{color: "#6c63ff", fontSize: "2rem", fontWeight: "bold"}}>
+                  ¿Cómo usar la herramienta y qué hace?
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-neutral-800 leading-relaxed">
+                   <div className="w-full flex justify-center border-b border-neutral-200 bg-white p-4">
+                     <img
+                  src={researchingSvg}
+                  alt="Ilustración de análisis y predicción"
+                  className="h-40 w-auto sm:h-44"
+                />
+              </div>
+                <p className="mb-3">
+                  Esta herramienta permite <strong>cargar un archivo Excel o CSV</strong> con
+                  registros de personas con discapacidad y generar, de forma automática,
+                  predicciones que apoyan la toma de decisiones en educación inclusiva.
+                </p>
+                <p className="mb-3">
+                  Al ejecutar las predicciones, el sistema consulta tres servicios (endpoints) y devuelve:
+                </p>
+                <ul className="list-disc pl-5 space-y-1 mb-3">
+                  <li>
+                    <strong>Asiste</strong>: estima si la persona asiste actualmente a una institución educativa.
+                  </li>
+                  <li>
+                    <strong>Causa</strong>: sugiere la causa más probable por la cual una persona no estudia.
+                  </li>
+                  <li>
+                    <strong>Nivel</strong>: estima el nivel educativo asociado/requerido según el perfil.
+                  </li>
+                </ul>
+                <p className="mb-3">
+                  El resultado se muestra con su <strong>probabilidad</strong> y un resumen de los resultados
+                  más frecuentes. La herramienta está pensada como un <strong>apoyo</strong> para análisis y
+                  priorización institucional; no reemplaza la valoración profesional.
+                </p>
+                <p className="text-xs text-neutral-600">
+                  Nota: asegúrate de que tu archivo contenga las columnas requeridas (si faltan, el sistema las completa
+                  con valores vacíos para mantener la estructura esperada).
+                </p>
+              </CardContent>
+            </Card>
+          </div> 
+
+          <div style={{ background: "#6c63ff", borderRadius: "10px", color: "white", padding: "1.5rem" }}>
+
           <div className="mb-4">
             <Label>
               Sube tu archivo (.xlsx/.csv) y usa los botones para ejecutar
-              predicciones o descargar resultados.
+              predicciones y ver los resultados.
             </Label>
           </div>
 
-          <div className="flex items-center gap-4 mb-4">
-            {/* More robust file opener: use a ref and trigger click() from the Button
-                  This avoids cases where label/htmlFor doesn't open the dialog in some browsers or custom components */}
+          <div style={{width: "100%", marginTop: "1rem"}}>
             <input
               ref={fileInputRef}
               id="fileInput"
@@ -333,17 +383,8 @@ export default function App() {
               }}
               className="hidden"
             />
-            <div >
-              <div
-                style={{
-                  marginBlock : "30px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "12px",
-                
-                }}
-              >
+            <div>
+      
                 <Button
                   onClick={() => {
                     const el =
@@ -352,30 +393,39 @@ export default function App() {
                     if (el) el.click();
                     else console.warn("file input not found");
                   }}
+
+                  style={ fileName ? { background: "#6c63ff", color: "white", fontWeight: "bold", border: "1px solid white" } : { background: "white", color: "#6c63ff", fontWeight: "bold" } }
                 >
-                  Subir archivo
+                  {fileName ? "Cambiar archivo" :"Subir archivo"}
                 </Button>
                 {fileName && (
-                  <div className="text-sm text-muted-foreground">
-                    {fileName}
-                  </div>
+                  <div style={{color: "whitesmoke", marginTop: "1rem" }}> <span style={{fontWeight: "bold"}}>
+                    Nombre de archivo subido: 
+                    </span> {fileName}</div>
+                  
                 )}
-              </div>
+               
+                {fileName && (<div>
+                  <strong>Filas cargadas:</strong> {rows.length}
+                </div>)}
+               {fileName && ( <div style={{display: "flex", alignItems: "center", marginTop: "1rem" , width: "100%", justifyContent: "center"}}>
+                <Button
+                  onClick={runPredictions}
+                  disabled={running}
+                  style={running ?  { background: "grey", color: "white", fontWeight: "bold", pointerEvents: "none" } : { background: "white", color: "#6c63ff", fontWeight: "bold" }}
+                >
+                 { running ? "Ejecutando..." : "Ejecutar predicciones"}
+                </Button>
+                </div>)}
             </div>
+          </div>
+
           </div>
 
           {rows.length > 0 && (
             <>
-              <div className="flex items-center gap-2 mb-4">
-                <div>
-                  Filas cargadas: <strong>{rows.length}</strong>
-                </div>
-                <Button onClick={runPredictions} disabled={running} style={{marginLeft: '8px'}}>
-                  Ejecutar predicciones
-                </Button>
-              </div>
 
-              <div className="mb-4">
+              <div style={{marginTop: "1.5rem"}}>
                 <Label>Progreso: {progress}%</Label>
                 <Progress value={progress} className="mt-2" />
               </div>
@@ -384,19 +434,21 @@ export default function App() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Endpoint</TableHead>
+                      <TableHead>Variable</TableHead>
                       <TableHead>Predicción</TableHead>
                       <TableHead>Probabilidad</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {['asiste', 'causa', 'nivel'].map((endpoint) => {
-                      const item = getTopPopularResults(results).find(r => r.endpoint === `pred_${endpoint}`);
+                    {["asiste", "causa", "nivel"].map((endpoint) => {
+                      const item = getTopPopularResults(results).find(
+                        (r) => r.endpoint === `pred_${endpoint}`
+                      );
                       return (
                         <TableRow key={endpoint}>
                           <TableCell>{endpoint}</TableCell>
-                          <TableCell>{item ? item.name : ''}</TableCell>
-                          <TableCell>{item ? item.prob : ''}</TableCell>
+                          <TableCell>{item ? item.name : ""}</TableCell>
+                          <TableCell>{item ? item.prob : ""}</TableCell>
                         </TableRow>
                       );
                     })}
@@ -407,6 +459,7 @@ export default function App() {
           )}
         </CardContent>
       </Card>
+
       {/* Toast */}
       {toast.show && (
         <div
