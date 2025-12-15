@@ -349,8 +349,8 @@ export default function App() {
                   </li>
                 </ul>
                 <p className="mb-3">
-                  El resultado se muestra con su <strong>probabilidad</strong> y un resumen de los resultados
-                  más frecuentes. La herramienta está pensada como un <strong>apoyo</strong> para análisis y
+                  El resultado se muestra con su probabilidad y un resumen de los resultados
+                  más frecuentes. La herramienta está pensada como un apoyo para análisis y
                   priorización institucional; no reemplaza la valoración profesional.
                 </p>
                 <p className="text-xs text-neutral-600">
