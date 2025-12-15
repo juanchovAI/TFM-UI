@@ -67,6 +67,9 @@ export default function App() {
   const fileInputRef = useRef(null);
   const [toast, setToast] = useState({ show: false, text: "", type: "info" });
 
+  // ✅ Modal desde cero
+  const [colsModalOpen, setColsModalOpen] = useState(false);
+
   function showToast(text, type = "info", ms = 4000) {
     setToast({ show: true, text, type });
     setTimeout(() => setToast({ show: false, text: "", type }), ms);
@@ -131,7 +134,6 @@ export default function App() {
   }
 
   async function runPredictions() {
-    // Use relative endpoints so the user doesn't need to set API base URL
     setRunning(true);
     setResults([]);
     setProgress(0);
@@ -145,7 +147,6 @@ export default function App() {
     const limit = pLimit(5);
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      // Ensure all values are strings to satisfy Pydantic schema on the backend
       const payload = {};
       Object.keys(row).forEach((k) => {
         const v = row[k];
@@ -154,7 +155,6 @@ export default function App() {
       });
 
       const tasks = Object.entries(endpoints).map(([name, url]) =>
-        // do not swallow errors here; let Promise.all reject so we can show a descriptive message
         limit(() =>
           axios
             .post(url, payload, { timeout: 30000 })
@@ -166,7 +166,6 @@ export default function App() {
         res = await Promise.all(tasks);
       } catch (e) {
         console.error("Error during prediction requests:", e);
-        // Try to extract meaningful info from axios error
         const resp = e?.response;
         if (resp) {
           const status = resp.status;
@@ -180,15 +179,9 @@ export default function App() {
           } catch (ex) {
             console.error("Failed to read error body", ex);
           }
-          showToast(
-            `Error ${status} from server: ${body || "[no body]"}`,
-            "error"
-          );
+          showToast(`Error ${status} from server: ${body || "[no body]"}`, "error");
         } else {
-          showToast(
-            `Network/error while predicting: ${e.message || e}`,
-            "error"
-          );
+          showToast(`Network/error while predicting: ${e.message || e}`, "error");
         }
         setRunning(false);
         return;
@@ -196,10 +189,8 @@ export default function App() {
       const rowResult = {};
       res.forEach((r) => {
         if (r && r.data) {
-          rowResult[`pred_${r.name}`] =
-            r.data.prediccion ?? r.data.prediction ?? "";
-          rowResult[`prob_${r.name}`] =
-            r.data.probabilidad ?? r.data.probability ?? null;
+          rowResult[`pred_${r.name}`] = r.data.prediccion ?? r.data.prediction ?? "";
+          rowResult[`prob_${r.name}`] = r.data.probabilidad ?? r.data.probability ?? null;
         } else {
           rowResult[`pred_${r.name}`] = "";
           rowResult[`prob_${r.name}`] = null;
@@ -225,81 +216,31 @@ export default function App() {
     setProgress(100);
   }
 
-  function downloadResults() {
-    const combined = rows.map((r, i) => ({ ...r, ...(results[i] || {}) }));
-    const ws = XLSX.utils.json_to_sheet(combined);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "predictions");
-    XLSX.writeFile(wb, `${fileName || "predictions"}`);
-  }
-
-  async function runBatchOnServer() {
-    if (!fileObj) {
-      alert("Sube un archivo primero");
-      return;
+  // ✅ Cerrar modal con tecla ESC (sin librerías)
+  React.useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === "Escape") setColsModalOpen(false);
     }
-    // Use relative endpoint for batch
-    const url = `/predict/batch`;
-    const form = new FormData();
-    form.append("file", fileObj, fileObj.name);
-    try {
-      const headers = { "Content-Type": "multipart/form-data" };
-      const resp = await axios.post(url, form, {
-        headers,
-        responseType: "blob",
-        timeout: 0,
-      });
-      const blob = new Blob([resp.data], {
-        type: resp.headers["content-type"],
-      });
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = downloadUrl;
-      const cd = resp.headers["content-disposition"] || "";
-      const match = cd.match(/filename="?(.*)"?$/);
-      const fname = match
-        ? match[1]
-        : fileName
-        ? `predictions_${fileName}`
-        : "predictions.xlsx";
-      a.download = fname;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-      showToast("Batch completado. Archivo descargado.", "success");
-    } catch (e) {
-      console.error("Batch upload error", e);
-      const resp = e?.response;
-      if (resp) {
-        const status = resp.status;
-        let body = resp.data;
-        try {
-          if (body instanceof Blob && typeof body.text === "function") {
-            body = await body.text();
-          } else if (typeof body === "object") {
-            body = JSON.stringify(body);
-          }
-        } catch (ex) {
-          console.error("Failed to read error body", ex);
-        }
-        showToast(
-          `Server error ${status} during batch: ${body || "[no body]"}`,
-          "error"
-        );
-      } else {
-        showToast(`Network/error executing batch: ${e.message || e}`, "error");
-      }
-    }
-  }
+    if (colsModalOpen) window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [colsModalOpen]);
 
   return (
     <div
       className="flex items-center flex-col min-h-screen w-full"
       style={{ background: "#6f7ba0ff", padding: "2rem" }}
     >
-      <h1 style={{ fontSize: "2.875rem", fontWeight: "bold", color: "white", marginBottom: "1.5rem", textAlign: "center", width: "70%" }}>
-        Herramienta web inteligente de predicción del acceso  a la educación inclusiva en Bogotá
+      <h1
+        style={{
+          fontSize: "2.875rem",
+          fontWeight: "bold",
+          color: "white",
+          marginBottom: "1.5rem",
+          textAlign: "center",
+          width: "70%",
+        }}
+      >
+        Herramienta web inteligente de predicción del acceso a la educación inclusiva en Bogotá
       </h1>
 
       <Card
@@ -307,7 +248,7 @@ export default function App() {
           maxWidth: "56rem",
           background: "white",
           color: "#222",
-         boxShadow: "0 4px 24px 0 rgba(0,0,0,0.08)",
+          boxShadow: "0 4px 24px 0 rgba(0,0,0,0.08)",
           borderRadius: "0.75rem",
         }}
       >
@@ -315,28 +256,32 @@ export default function App() {
           <div className="mb-6">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle >
-                  <div style={{color: "#6c63ff", fontSize: "2rem", fontWeight: "bold"}}>
-                  ¿Cómo usar la herramienta y qué hace?
+                <CardTitle>
+                  <div style={{ color: "#6c63ff", fontSize: "2rem", fontWeight: "bold" }}>
+                    ¿Cómo usar la herramienta y qué hace?
                   </div>
                 </CardTitle>
               </CardHeader>
+
               <CardContent className="text-sm text-neutral-800 leading-relaxed">
-                   <div className="w-full flex justify-center border-b border-neutral-200 bg-white p-4">
-                     <img
-                  src={researchingSvg}
-                  alt="Ilustración de análisis y predicción"
-                  className="h-40 w-auto sm:h-44"
-                />
-              </div>
+                <div className="w-full flex justify-center border-b border-neutral-200 bg-white p-4">
+                  <img
+                    src={researchingSvg}
+                    alt="Ilustración de análisis y predicción"
+                    className="h-40 w-auto sm:h-44"
+                  />
+                </div>
+
                 <p className="mb-3">
-                  Esta herramienta permite <strong>cargar un archivo Excel o CSV</strong> con
-                  registros de personas con discapacidad y generar, de forma automática,
-                  predicciones que apoyan la toma de decisiones en educación inclusiva.
+                  Esta herramienta permite <strong>cargar un archivo Excel o CSV</strong> con registros
+                  de personas con discapacidad y generar, de forma automática, predicciones que apoyan
+                  la toma de decisiones en educación inclusiva.
                 </p>
+
                 <p className="mb-3">
                   Al ejecutar las predicciones, el sistema consulta tres servicios (endpoints) y devuelve:
                 </p>
+
                 <ul className="list-disc pl-5 space-y-1 mb-3">
                   <li>
                     <strong>Asiste</strong>: estima si la persona asiste actualmente a una institución educativa.
@@ -348,84 +293,108 @@ export default function App() {
                     <strong>Nivel</strong>: estima el nivel educativo asociado/requerido según el perfil.
                   </li>
                 </ul>
+
                 <p className="mb-3">
                   El resultado se muestra con su probabilidad y un resumen de los resultados
                   más frecuentes. La herramienta está pensada como un apoyo para análisis y
                   priorización institucional; no reemplaza la valoración profesional.
                 </p>
+
+                {/* ✅ Nota + botón abre modal */}
                 <p className="text-xs text-neutral-600">
                   Nota: asegúrate de que tu archivo contenga las columnas requeridas (si faltan, el sistema las completa
-                  con valores vacíos para mantener la estructura esperada).
+                  con valores vacíos para mantener la estructura esperada).{" "}
+                  <button
+                    type="button"
+                    onClick={() => setColsModalOpen(true)}
+                    style={{
+                      color: "#6c63ff",
+                      textDecoration: "underline",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      background: "transparent",
+                      border: "none",
+                      padding: 0,
+                    }}
+                  >
+                    Ver columnas requeridas
+                  </button>
+                  .
                 </p>
               </CardContent>
             </Card>
-          </div> 
-
-          <div style={{ background: "#6c63ff", borderRadius: "10px", color: "white", padding: "1.5rem" }}>
-
-          <div className="mb-4">
-            <Label>
-              Sube tu archivo (.xlsx/.csv) y usa los botones para ejecutar
-              predicciones y ver los resultados.
-            </Label>
           </div>
 
-          <div style={{width: "100%", marginTop: "1rem"}}>
-            <input
-              ref={fileInputRef}
-              id="fileInput"
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              onChange={(e) => {
-                console.log("file input change", e.target.files);
-                if (e.target.files && e.target.files[0])
-                  readFile(e.target.files[0]);
-              }}
-              className="hidden"
-            />
-            <div>
-      
+          <div style={{ background: "#6c63ff", borderRadius: "10px", color: "white", padding: "1.5rem" }}>
+            <div className="mb-4">
+              <Label>
+                Sube tu archivo (.xlsx/.csv) y usa los botones para ejecutar predicciones y ver los resultados.
+              </Label>
+            </div>
+
+            <div style={{ width: "100%", marginTop: "1rem" }}>
+              <input
+                ref={fileInputRef}
+                id="fileInput"
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={(e) => {
+                  console.log("file input change", e.target.files);
+                  if (e.target.files && e.target.files[0]) readFile(e.target.files[0]);
+                }}
+                className="hidden"
+              />
+
+              <div>
                 <Button
                   onClick={() => {
-                    const el =
-                      fileInputRef?.current ||
-                      document.getElementById("fileInput");
+                    const el = fileInputRef?.current || document.getElementById("fileInput");
                     if (el) el.click();
                     else console.warn("file input not found");
                   }}
-
-                  style={ fileName ? { background: "#6c63ff", color: "white", fontWeight: "bold", border: "1px solid white" } : { background: "white", color: "#6c63ff", fontWeight: "bold" } }
+                  style={
+                    fileName
+                      ? { background: "#6c63ff", color: "white", fontWeight: "bold", border: "1px solid white" }
+                      : { background: "white", color: "#6c63ff", fontWeight: "bold" }
+                  }
                 >
-                  {fileName ? "Cambiar archivo" :"Subir archivo"}
+                  {fileName ? "Cambiar archivo" : "Subir archivo"}
                 </Button>
+
                 {fileName && (
-                  <div style={{color: "whitesmoke", marginTop: "1rem" }}> <span style={{fontWeight: "bold"}}>
-                    Nombre de archivo subido: 
-                    </span> {fileName}</div>
-                  
+                  <div style={{ color: "whitesmoke", marginTop: "1rem" }}>
+                    <span style={{ fontWeight: "bold" }}>Nombre de archivo subido:</span> {fileName}
+                  </div>
                 )}
-               
-                {fileName && (<div>
-                  <strong>Filas cargadas:</strong> {rows.length}
-                </div>)}
-               {fileName && ( <div style={{display: "flex", alignItems: "center", marginTop: "1rem" , width: "100%", justifyContent: "center"}}>
-                <Button
-                  onClick={runPredictions}
-                  disabled={running}
-                  style={running ?  { background: "grey", color: "white", fontWeight: "bold", pointerEvents: "none" } : { background: "white", color: "#6c63ff", fontWeight: "bold" }}
-                >
-                 { running ? "Ejecutando..." : "Ejecutar predicciones"}
-                </Button>
-                </div>)}
-            </div>
-          </div>
 
+                {fileName && (
+                  <div>
+                    <strong>Filas cargadas:</strong> {rows.length}
+                  </div>
+                )}
+
+                {fileName && (
+                  <div style={{ display: "flex", alignItems: "center", marginTop: "1rem", width: "100%", justifyContent: "center" }}>
+                    <Button
+                      onClick={runPredictions}
+                      disabled={running}
+                      style={
+                        running
+                          ? { background: "grey", color: "white", fontWeight: "bold", pointerEvents: "none" }
+                          : { background: "white", color: "#6c63ff", fontWeight: "bold" }
+                      }
+                    >
+                      {running ? "Ejecutando..." : "Ejecutar predicciones"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {rows.length > 0 && (
             <>
-
-              <div style={{marginTop: "1.5rem"}}>
+              <div style={{ marginTop: "1.5rem" }}>
                 <Label>Progreso: {progress}%</Label>
                 <Progress value={progress} className="mt-2" />
               </div>
@@ -441,9 +410,7 @@ export default function App() {
                   </TableHeader>
                   <TableBody>
                     {["asiste", "causa", "nivel"].map((endpoint) => {
-                      const item = getTopPopularResults(results).find(
-                        (r) => r.endpoint === `pred_${endpoint}`
-                      );
+                      const item = getTopPopularResults(results).find((r) => r.endpoint === `pred_${endpoint}`);
                       return (
                         <TableRow key={endpoint}>
                           <TableCell>{endpoint}</TableCell>
@@ -456,6 +423,101 @@ export default function App() {
                 </Table>
               </div>
             </>
+          )}
+
+          {/* ✅ MODAL DESDE CERO */}
+          {colsModalOpen && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              onClick={() => setColsModalOpen(false)}
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.55)",
+                zIndex: 9999,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "1rem",
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  width: "min(720px, 95vw)",
+                  background: "white",
+                  borderRadius: "12px",
+                  boxShadow: "0 18px 60px rgba(0,0,0,0.35)",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "16px 18px",
+                    borderBottom: "1px solid #e5e7eb",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#111827" }}>
+                      Columnas requeridas del archivo
+                    </div>
+                    <div style={{ fontSize: "0.85rem", color: "#6b7280", marginTop: "4px" }}>
+                      Si alguna columna falta, se completará vacía para mantener la estructura.
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setColsModalOpen(false)}
+                    aria-label="Cerrar"
+                    style={{
+                      border: "1px solid #e5e7eb",
+                      borderRadius: "999px",
+                      padding: "6px 10px",
+                      cursor: "pointer",
+                      background: "white",
+                      fontWeight: 700,
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div style={{ padding: "14px 18px" }}>
+                  <div
+                    style={{
+                      maxHeight: "55vh",
+                      overflow: "auto",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: "10px",
+                      padding: "10px 12px",
+                      background: "#fafafa",
+                    }}
+                  >
+                    <ol style={{ margin: 0, paddingLeft: "1.25rem", lineHeight: 1.55 }}>
+                      {requiredFields.map((c) => (
+                        <li key={c} style={{ padding: "4px 0", color: "#111827", fontSize: "0.9rem" }}>
+                          <code style={{ fontSize: "0.82rem", background: "white", border: "1px solid #e5e7eb", padding: "2px 6px", borderRadius: "6px" }}>
+                            {c}
+                          </code>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "12px" }}>
+                    <Button style={{backgroundColor: "rgb(108, 99, 255)", color: "white", padding: "8px 16px", borderRadius: "6px"}} type="button" onClick={() => setColsModalOpen(false)}>
+                      Cerrar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
