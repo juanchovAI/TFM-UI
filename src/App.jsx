@@ -298,8 +298,8 @@ export default function App() {
       className="flex items-center flex-col min-h-screen w-full"
       style={{ background: "#6f7ba0ff", padding: "2rem" }}
     >
-      <h1 style={{ fontSize: "2.875rem", fontWeight: "bold", color: "white" }}>
-        Herramienta inteligente para apoyo a la educación inclusiva
+      <h1 style={{ fontSize: "2.875rem", fontWeight: "bold", color: "white", marginBottom: "1.5rem", textAlign: "center", width: "70%" }}>
+        Herramienta web inteligente de predicción del acceso  a la educación inclusiva en Bogotá
       </h1>
 
       <Card
