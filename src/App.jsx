@@ -23,9 +23,9 @@ function toPercent2(prob01) {
 function getScoreBg(prob01) {
   const p = Number(prob01);
   if (!Number.isFinite(p)) return "#f59e0b"; // naranja por defecto
-  if (p >= 0.8) return "#16a34a"; // verde
-  if (p <= 0.2) return "#dc2626"; // rojo
-  return "#f59e0b"; // naranja
+  if (p >= 0.8) return "#078f56ff"; // verde
+  if (p <= 0.2) return "#a81919dc"; // rojo
+  return "#b17308ea"; // naranja
 }
 
 function getBestPerEndpoint(results, endpoint) {
@@ -258,11 +258,6 @@ export default function App() {
           <span style={{ fontWeight: 900 }}>{toPercent2(item?.prob)}</span>
         </div>
 
-        {Number.isFinite(Number(item?.idx)) && (
-          <div style={{ fontSize: "0.82rem", opacity: 0.9 }}>
-            Registro donde ocurrió: <strong>#{Number(item.idx) + 1}</strong>
-          </div>
-        )}
       </div>
     );
   };
@@ -605,10 +600,10 @@ export default function App() {
                 >
                   <div>
                     <div style={{ fontSize: "1.05rem", fontWeight: 900, color: "#111827" }}>
-                      Mejores resultados por modelo (asiste / causa / nivel)
+                      Resultados
                     </div>
                     <div style={{ fontSize: "0.85rem", color: "#6b7280", marginTop: "4px" }}>
-                      Se muestra la predicción con mayor probabilidad encontrada en todos los registros.
+                      Se muestra la predicción para las variables.
                     </div>
                   </div>
 
@@ -617,12 +612,13 @@ export default function App() {
                     onClick={() => setResultsModalOpen(false)}
                     aria-label="Cerrar"
                     style={{
-                      border: "1px solid #e5e7eb",
+                      border: "1px solid #2a69e6ff",
                       borderRadius: "999px",
                       padding: "6px 10px",
                       cursor: "pointer",
                       background: "white",
                       fontWeight: 800,
+                      color: "#2a69e6ff",
                     }}
                   >
                     ✕
@@ -637,9 +633,9 @@ export default function App() {
                       gap: "12px",
                     }}
                   >
-                    <ResultCard title="Asiste (mejor probabilidad)" item={bestAsiste} />
-                    <ResultCard title="Causa (mejor probabilidad)" item={bestCausa} />
-                    <ResultCard title="Nivel (mejor probabilidad)" item={bestNivel} />
+                    <ResultCard title="Asiste a institución educativa" item={bestAsiste} />
+                    <ResultCard title="Causa por la que no asiste o no asistiría a institución educativa" item={bestCausa} />
+                    <ResultCard title="Nivel educativo alcanzado" item={bestNivel} />
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "14px" }}>
