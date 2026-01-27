@@ -316,18 +316,18 @@ export default function App() {
                 </p>
 
                 <p className="mb-3">
-                  Al ejecutar las predicciones, el sistema consulta tres servicios (endpoints) y devuelve:
+                  Al al ejecutar vas a tener los siguientes respuestas
                 </p>
 
                 <ul className="list-disc pl-5 space-y-1 mb-3">
                   <li>
-                    <strong>Asiste</strong>: estima si la persona asiste actualmente a una institución educativa.
+                    <strong>Asiste a institución educativa</strong>: estima si la persona asiste actualmente a una institución educativa.
                   </li>
                   <li>
-                    <strong>Causa</strong>: sugiere la causa más probable por la cual una persona no estudia.
+                    <strong>Causa por la que no asiste o no asistiría a institución educativa</strong>: sugiere la causa más probable por la cual una persona no estudia.
                   </li>
                   <li>
-                    <strong>Nivel</strong>: estima el nivel educativo asociado/requerido según el perfil.
+                    <strong>Nivel educativo alcanzado</strong>: estima el nivel educativo asociado/requerido según el perfil.
                   </li>
                 </ul>
 
