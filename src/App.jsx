@@ -9,24 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Separator } from "@/components/ui/separator";
+
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
+  PieChart,
+  Pie,
   Tooltip,
-  CartesianGrid,
 } from "recharts";
-import { Separator } from "@/components/ui/separator";
+
 import "./App.css";
 import researchingSvg from "./assets/undraw_researching_49yy.svg";
 
@@ -66,43 +57,10 @@ function getTopPopularResults(results) {
   }));
 }
 
-function buildDistribution(results, predKey, probKey, topN = 8) {
-  const map = new Map();
-
-  for (const r of results || []) {
-    const label = (r?.[predKey] ?? "").toString().trim();
-    if (!label) continue;
-
-    const prob = parseFloat(r?.[probKey]);
-    const prev = map.get(label) || {
-      name: label,
-      count: 0,
-      probSum: 0,
-      probCount: 0,
-    };
-
-    prev.count += 1;
-    if (!Number.isNaN(prob)) {
-      prev.probSum += prob;
-      prev.probCount += 1;
-    }
-
-    map.set(label, prev);
-  }
-
-  const arr = [...map.values()].map((x) => ({
-    name: x.name,
-    count: x.count,
-    avgProb: x.probCount ? x.probSum / x.probCount : null,
-  }));
-
-  arr.sort((a, b) => b.count - a.count);
-  return arr.slice(0, topN);
-}
-
-function formatProb(p) {
-  if (p === null || p === undefined || Number.isNaN(p)) return "";
-  return `${(p * 100).toFixed(1)}%`;
+function toPercent2(prob01) {
+  const p = Number(prob01);
+  if (!Number.isFinite(p)) return "";
+  return `${(p * 100).toFixed(2)}%`;
 }
 
 export default function App() {
@@ -114,10 +72,13 @@ export default function App() {
   const [fileObj, setFileObj] = useState(null);
   const fileInputRef = useRef(null);
   const [toast, setToast] = useState({ show: false, text: "", type: "info" });
-  const [resultsModalOpen, setResultsModalOpen] = useState(false);
 
-  // ✅ Modal desde cero
+  // ✅ Modal columnas requeridas
   const [colsModalOpen, setColsModalOpen] = useState(false);
+
+  // ✅ Modal resultados
+  const [resultsModalOpen, setResultsModalOpen] = useState(false);
+  const [selectedRowIdx, setSelectedRowIdx] = useState(0);
 
   function showToast(text, type = "info", ms = 4000) {
     setToast({ show: true, text, type });
@@ -166,6 +127,7 @@ export default function App() {
       const wb = XLSX.read(data, { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
+
       const filled = json.map((r) => {
         const obj = { ...r };
         requiredFields.forEach((f) => {
@@ -173,6 +135,7 @@ export default function App() {
         });
         return obj;
       });
+
       setFileName(file.name);
       setFileObj(file);
       setRows(filled);
@@ -194,6 +157,7 @@ export default function App() {
     };
 
     const limit = pLimit(5);
+
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const payload = {};
@@ -210,6 +174,7 @@ export default function App() {
             .then((r) => ({ name, data: r.data }))
         )
       );
+
       let res;
       try {
         res = await Promise.all(tasks);
@@ -228,60 +193,66 @@ export default function App() {
           } catch (ex) {
             console.error("Failed to read error body", ex);
           }
-          showToast(
-            `Error ${status} from server: ${body || "[no body]"}`,
-            "error"
-          );
+          showToast(`Error ${status} from server: ${body || "[no body]"}`, "error");
         } else {
-          showToast(
-            `Network/error while predicting: ${e.message || e}`,
-            "error"
-          );
+          showToast(`Network/error while predicting: ${e.message || e}`, "error");
         }
         setRunning(false);
         return;
       }
+
       const rowResult = {};
       res.forEach((r) => {
         if (r && r.data) {
-          rowResult[`pred_${r.name}`] =
-            r.data.prediccion ?? r.data.prediction ?? "";
-          rowResult[`prob_${r.name}`] =
-            r.data.probabilidad ?? r.data.probability ?? null;
+          rowResult[`pred_${r.name}`] = r.data.prediccion ?? r.data.prediction ?? "";
+          rowResult[`prob_${r.name}`] = r.data.probabilidad ?? r.data.probability ?? null;
         } else {
           rowResult[`pred_${r.name}`] = "";
           rowResult[`prob_${r.name}`] = null;
         }
       });
+
+      // Elegir la mejor predicción (top-1) por probabilidad entre causa/asiste/nivel
       const probs = ["prob_causa", "prob_asiste", "prob_nivel"];
       let top = null;
       let topVal = -1;
+
       probs.forEach((p) => {
         const v = parseFloat(rowResult[p]);
-        if (!isNaN(v) && v > topVal) {
+        if (!Number.isNaN(v) && v > topVal) {
           topVal = v;
           top = p.replace("prob_", "");
         }
       });
-      rowResult.top_endpoint = top;
+
+      rowResult.top_endpoint = top; // "causa" | "asiste" | "nivel"
       rowResult.top_prob = topVal === -1 ? null : topVal;
+
+      // Guardar el texto de la predicción ganadora
+      const predKey = top ? `pred_${top}` : null;
+      rowResult.top_pred = predKey ? (rowResult[predKey] ?? "") : "";
+
       setResults((prev) => [...prev, rowResult]);
       setProgress(Math.round(((i + 1) / rows.length) * 100));
     }
 
     setRunning(false);
     setProgress(100);
+    setSelectedRowIdx(0);
     setResultsModalOpen(true);
   }
 
   // ✅ Cerrar modal con tecla ESC (sin librerías)
   React.useEffect(() => {
     function onKeyDown(e) {
-      if (e.key === "Escape") setColsModalOpen(false);
+      if (e.key === "Escape") {
+        setColsModalOpen(false);
+        setResultsModalOpen(false);
+      }
     }
-    if (colsModalOpen) window.addEventListener("keydown", onKeyDown);
+    if (colsModalOpen || resultsModalOpen) window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [colsModalOpen]);
+  }, [colsModalOpen, resultsModalOpen]);
 
   return (
     <div
@@ -298,8 +269,7 @@ export default function App() {
           width: "70%",
         }}
       >
-        Herramienta web inteligente de predicción del acceso a la educación
-        inclusiva en Bogotá
+        Herramienta web inteligente de predicción del acceso a la educación inclusiva en Bogotá
       </h1>
 
       <Card
@@ -316,13 +286,7 @@ export default function App() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle>
-                  <div
-                    style={{
-                      color: "#6c63ff",
-                      fontSize: "2rem",
-                      fontWeight: "bold",
-                    }}
-                  >
+                  <div style={{ color: "#6c63ff", fontSize: "2rem", fontWeight: "bold" }}>
                     ¿Cómo usar la herramienta y qué hace?
                   </div>
                 </CardTitle>
@@ -338,45 +302,35 @@ export default function App() {
                 </div>
 
                 <p className="mb-3">
-                  Esta herramienta permite{" "}
-                  <strong>cargar un archivo Excel o CSV</strong> con registros
-                  de personas con discapacidad y generar, de forma automática,
-                  predicciones que apoyan la toma de decisiones en educación
-                  inclusiva.
+                  Esta herramienta permite <strong>cargar un archivo Excel o CSV</strong> con registros
+                  de personas con discapacidad y generar, de forma automática, predicciones que apoyan
+                  la toma de decisiones en educación inclusiva.
                 </p>
 
                 <p className="mb-3">
-                  Al ejecutar las predicciones, el sistema consulta tres
-                  servicios (endpoints) y devuelve:
+                  Al ejecutar las predicciones, el sistema consulta tres servicios (endpoints) y devuelve:
                 </p>
 
                 <ul className="list-disc pl-5 space-y-1 mb-3">
                   <li>
-                    <strong>Asiste</strong>: estima si la persona asiste
-                    actualmente a una institución educativa.
+                    <strong>Asiste</strong>: estima si la persona asiste actualmente a una institución educativa.
                   </li>
                   <li>
-                    <strong>Causa</strong>: sugiere la causa más probable por la
-                    cual una persona no estudia.
+                    <strong>Causa</strong>: sugiere la causa más probable por la cual una persona no estudia.
                   </li>
                   <li>
-                    <strong>Nivel</strong>: estima el nivel educativo
-                    asociado/requerido según el perfil.
+                    <strong>Nivel</strong>: estima el nivel educativo asociado/requerido según el perfil.
                   </li>
                 </ul>
 
                 <p className="mb-3">
-                  El resultado se muestra con su probabilidad y un resumen de
-                  los resultados más frecuentes. La herramienta está pensada
-                  como un apoyo para análisis y priorización institucional; no
-                  reemplaza la valoración profesional.
+                  El resultado se muestra con su probabilidad. La herramienta está pensada como un apoyo
+                  para análisis y priorización institucional; no reemplaza la valoración profesional.
                 </p>
 
-                {/* ✅ Nota + botón abre modal */}
                 <p className="text-xs text-neutral-600">
-                  Nota: asegúrate de que tu archivo contenga las columnas
-                  requeridas (si faltan, el sistema las completa con valores
-                  vacíos para mantener la estructura esperada).{" "}
+                  Nota: asegúrate de que tu archivo contenga las columnas requeridas (si faltan, el sistema las completa
+                  con valores vacíos para mantener la estructura esperada).{" "}
                   <button
                     type="button"
                     onClick={() => setColsModalOpen(true)}
@@ -398,19 +352,9 @@ export default function App() {
             </Card>
           </div>
 
-          <div
-            style={{
-              background: "#6c63ff",
-              borderRadius: "10px",
-              color: "white",
-              padding: "1.5rem",
-            }}
-          >
+          <div style={{ background: "#6c63ff", borderRadius: "10px", color: "white", padding: "1.5rem" }}>
             <div className="mb-4">
-              <Label>
-                Sube tu archivo (.xlsx/.csv) y usa los botones para ejecutar
-                predicciones y ver los resultados.
-              </Label>
+              <Label>Sube tu archivo (.xlsx/.csv) y usa los botones para ejecutar predicciones y ver los resultados.</Label>
             </div>
 
             <div style={{ width: "100%", marginTop: "1rem" }}>
@@ -420,9 +364,7 @@ export default function App() {
                 type="file"
                 accept=".xlsx,.xls,.csv"
                 onChange={(e) => {
-                  console.log("file input change", e.target.files);
-                  if (e.target.files && e.target.files[0])
-                    readFile(e.target.files[0]);
+                  if (e.target.files && e.target.files[0]) readFile(e.target.files[0]);
                 }}
                 className="hidden"
               />
@@ -430,25 +372,14 @@ export default function App() {
               <div>
                 <Button
                   onClick={() => {
-                    const el =
-                      fileInputRef?.current ||
-                      document.getElementById("fileInput");
+                    const el = fileInputRef?.current || document.getElementById("fileInput");
                     if (el) el.click();
                     else console.warn("file input not found");
                   }}
                   style={
                     fileName
-                      ? {
-                          background: "#6c63ff",
-                          color: "white",
-                          fontWeight: "bold",
-                          border: "1px solid white",
-                        }
-                      : {
-                          background: "white",
-                          color: "#6c63ff",
-                          fontWeight: "bold",
-                        }
+                      ? { background: "#6c63ff", color: "white", fontWeight: "bold", border: "1px solid white" }
+                      : { background: "white", color: "#6c63ff", fontWeight: "bold" }
                   }
                 >
                   {fileName ? "Cambiar archivo" : "Subir archivo"}
@@ -456,10 +387,7 @@ export default function App() {
 
                 {fileName && (
                   <div style={{ color: "whitesmoke", marginTop: "1rem" }}>
-                    <span style={{ fontWeight: "bold" }}>
-                      Nombre de archivo subido:
-                    </span>{" "}
-                    {fileName}
+                    <span style={{ fontWeight: "bold" }}>Nombre de archivo subido:</span> {fileName}
                   </div>
                 )}
 
@@ -470,31 +398,14 @@ export default function App() {
                 )}
 
                 {fileName && (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      marginTop: "1rem",
-                      width: "100%",
-                      justifyContent: "center",
-                    }}
-                  >
+                  <div style={{ display: "flex", alignItems: "center", marginTop: "1rem", width: "100%", justifyContent: "center" }}>
                     <Button
                       onClick={runPredictions}
                       disabled={running}
                       style={
                         running
-                          ? {
-                              background: "grey",
-                              color: "white",
-                              fontWeight: "bold",
-                              pointerEvents: "none",
-                            }
-                          : {
-                              background: "white",
-                              color: "#6c63ff",
-                              fontWeight: "bold",
-                            }
+                          ? { background: "grey", color: "white", fontWeight: "bold", pointerEvents: "none" }
+                          : { background: "white", color: "#6c63ff", fontWeight: "bold" }
                       }
                     >
                       {running ? "Ejecutando..." : "Ejecutar predicciones"}
@@ -513,30 +424,27 @@ export default function App() {
               </div>
 
               {results.length > 0 && (
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "center",
-                    marginTop: "14px",
-                  }}
-                >
+                <div style={{ display: "flex", justifyContent: "center", marginTop: "14px" }}>
                   <Button
                     type="button"
-                    onClick={() => setResultsModalOpen(true)}
+                    onClick={() => {
+                      setSelectedRowIdx(0);
+                      setResultsModalOpen(true);
+                    }}
                     style={{
                       background: "white",
                       color: "#6c63ff",
                       fontWeight: "bold",
                     }}
                   >
-                    Ver resultados (gráficas)
+                    Ver resultados (torta)
                   </Button>
                 </div>
               )}
             </>
           )}
 
-          {/* ✅ MODAL DESDE CERO */}
+          {/* ✅ MODAL columnas requeridas */}
           {colsModalOpen && (
             <div
               role="dialog"
@@ -574,24 +482,11 @@ export default function App() {
                   }}
                 >
                   <div>
-                    <div
-                      style={{
-                        fontSize: "1.05rem",
-                        fontWeight: 800,
-                        color: "#111827",
-                      }}
-                    >
+                    <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#111827" }}>
                       Columnas requeridas del archivo
                     </div>
-                    <div
-                      style={{
-                        fontSize: "0.85rem",
-                        color: "#6b7280",
-                        marginTop: "4px",
-                      }}
-                    >
-                      Si alguna columna falta, se completará vacía para mantener
-                      la estructura.
+                    <div style={{ fontSize: "0.85rem", color: "#6b7280", marginTop: "4px" }}>
+                      Si alguna columna falta, se completará vacía para mantener la estructura.
                     </div>
                   </div>
 
@@ -623,22 +518,9 @@ export default function App() {
                       background: "#fafafa",
                     }}
                   >
-                    <ol
-                      style={{
-                        margin: 0,
-                        paddingLeft: "1.25rem",
-                        lineHeight: 1.55,
-                      }}
-                    >
+                    <ol style={{ margin: 0, paddingLeft: "1.25rem", lineHeight: 1.55 }}>
                       {requiredFields.map((c) => (
-                        <li
-                          key={c}
-                          style={{
-                            padding: "4px 0",
-                            color: "#111827",
-                            fontSize: "0.9rem",
-                          }}
-                        >
+                        <li key={c} style={{ padding: "4px 0", color: "#111827", fontSize: "0.9rem" }}>
                           <code
                             style={{
                               fontSize: "0.82rem",
@@ -655,13 +537,7 @@ export default function App() {
                     </ol>
                   </div>
 
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "flex-end",
-                      marginTop: "12px",
-                    }}
-                  >
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "12px" }}>
                     <Button
                       style={{
                         backgroundColor: "rgb(108, 99, 255)",
@@ -679,6 +555,8 @@ export default function App() {
               </div>
             </div>
           )}
+
+          {/* ✅ MODAL resultados: SOLO predicción + % + torta */}
           {resultsModalOpen && (
             <div
               role="dialog"
@@ -698,7 +576,7 @@ export default function App() {
               <div
                 onClick={(e) => e.stopPropagation()}
                 style={{
-                  width: "min(980px, 96vw)",
+                  width: "min(860px, 96vw)",
                   background: "white",
                   borderRadius: "12px",
                   boxShadow: "0 18px 60px rgba(0,0,0,0.35)",
@@ -716,24 +594,11 @@ export default function App() {
                   }}
                 >
                   <div>
-                    <div
-                      style={{
-                        fontSize: "1.05rem",
-                        fontWeight: 900,
-                        color: "#111827",
-                      }}
-                    >
-                      Resultados de predicción (resumen en gráficas)
+                    <div style={{ fontSize: "1.05rem", fontWeight: 900, color: "#111827" }}>
+                      Resultado (predicción + probabilidad)
                     </div>
-                    <div
-                      style={{
-                        fontSize: "0.85rem",
-                        color: "#6b7280",
-                        marginTop: "4px",
-                      }}
-                    >
-                      Registros procesados: <strong>{results.length}</strong> /{" "}
-                      {rows.length}
+                    <div style={{ fontSize: "0.85rem", color: "#6b7280", marginTop: "4px" }}>
+                      Registros procesados: <strong>{results.length}</strong> / {rows.length}
                     </div>
                   </div>
 
@@ -755,198 +620,172 @@ export default function App() {
                 </div>
 
                 <div style={{ padding: "14px 18px" }}>
-                  {/* Construimos datos TOP por endpoint */}
-                  {(() => {
-                    const dataAsiste = buildDistribution(
-                      results,
-                      "pred_asiste",
-                      "prob_asiste",
-                      8
-                    );
-                    const dataCausa = buildDistribution(
-                      results,
-                      "pred_causa",
-                      "prob_causa",
-                      8
-                    );
-                    const dataNivel = buildDistribution(
-                      results,
-                      "pred_nivel",
-                      "prob_nivel",
-                      8
-                    );
+                  {results.length === 0 ? (
+                    <div style={{ color: "#6b7280" }}>Aún no hay resultados para mostrar.</div>
+                  ) : (
+                    (() => {
+                      const safeIdx = Math.min(Math.max(selectedRowIdx, 0), results.length - 1);
+                      const r = results[safeIdx] || {};
+                      const prob = Number(r.top_prob);
+                      const pred = (r.top_pred ?? "").toString();
 
-                    const ChartBlock = ({ title, data }) => (
-                      <div
-                        style={{
-                          border: "1px solid #e5e7eb",
-                          borderRadius: "12px",
-                          padding: "12px",
-                          background: "#fafafa",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontWeight: 900,
-                            color: "#111827",
-                            marginBottom: "8px",
-                          }}
-                        >
-                          {title}
-                        </div>
+                      const pieData = [
+                        { name: "Probabilidad", value: Number.isFinite(prob) ? prob : 0 },
+                        { name: "Resto", value: Number.isFinite(prob) ? Math.max(0, 1 - prob) : 1 },
+                      ];
 
-                        {!data || data.length === 0 ? (
-                          <div style={{ color: "#6b7280", fontSize: "0.9rem" }}>
-                            Aún no hay datos para graficar.
-                          </div>
-                        ) : (
-                          <div style={{ width: "100%", height: 280 }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart
-                                data={data}
-                                margin={{
-                                  top: 10,
-                                  right: 16,
-                                  bottom: 40,
-                                  left: 0,
-                                }}
-                              >
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis
-                                  dataKey="name"
-                                  interval={0}
-                                  angle={-18}
-                                  textAnchor="end"
-                                  height={60}
-                                />
-                                <YAxis allowDecimals={false} />
-                                <Tooltip
-                                  formatter={(value, name, props) => {
-                                    if (name === "count")
-                                      return [value, "Frecuencia"];
-                                    return [value, name];
-                                  }}
-                                  labelFormatter={(label) =>
-                                    `Categoría: ${label}`
-                                  }
-                                  contentStyle={{ fontSize: "0.9rem" }}
-                                />
-                                <Bar dataKey="count" />
-                              </BarChart>
-                            </ResponsiveContainer>
-
-                            {/* Mini resumen con prob promedio */}
-                            <div
-                              style={{
-                                marginTop: "8px",
-                                fontSize: "0.85rem",
-                                color: "#374151",
-                              }}
-                            >
-                              <strong>Tip:</strong> en el tooltip estás viendo
-                              la frecuencia; si quieres, también podemos
-                              graficar <em>promedio de probabilidad</em>{" "}
-                              (avgProb) o la prob del top-1.
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-
-                    return (
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr",
-                          gap: "12px",
-                        }}
-                      >
-                        <ChartBlock
-                          title="Asiste — Top categorías más frecuentes"
-                          data={dataAsiste}
-                        />
-                        <ChartBlock
-                          title="Causa — Top categorías más frecuentes"
-                          data={dataCausa}
-                        />
-                        <ChartBlock
-                          title="Nivel — Top categorías más frecuentes"
-                          data={dataNivel}
-                        />
-
-                        {/* Resumen Top-3 global (opcional) */}
-                        <div
-                          style={{
-                            border: "1px solid #e5e7eb",
-                            borderRadius: "12px",
-                            padding: "12px",
-                            background: "white",
-                          }}
-                        >
+                      return (
+                        <div style={{ display: "grid", gap: "12px" }}>
+                          {/* Selector de registro */}
                           <div
                             style={{
-                              fontWeight: 900,
-                              color: "#111827",
-                              marginBottom: "8px",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "10px",
+                              flexWrap: "wrap",
+                              border: "1px solid #e5e7eb",
+                              borderRadius: "12px",
+                              padding: "10px 12px",
+                              background: "#fafafa",
                             }}
                           >
-                            Resumen (Top 3 global por popularidad)
-                          </div>
+                            <div style={{ fontWeight: 900, color: "#111827" }}>Registro:</div>
 
-                          {getTopPopularResults(results).length === 0 ? (
-                            <div
-                              style={{ color: "#6b7280", fontSize: "0.9rem" }}
-                            >
-                              Sin resultados aún.
-                            </div>
-                          ) : (
-                            <ul
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRowIdx((v) => Math.max(0, v - 1))}
+                              disabled={safeIdx === 0}
                               style={{
-                                margin: 0,
-                                paddingLeft: "1.1rem",
-                                lineHeight: 1.6,
+                                border: "1px solid #e5e7eb",
+                                background: "white",
+                                borderRadius: "10px",
+                                padding: "6px 10px",
+                                cursor: safeIdx === 0 ? "not-allowed" : "pointer",
+                                opacity: safeIdx === 0 ? 0.5 : 1,
+                                fontWeight: 800,
                               }}
                             >
-                              {getTopPopularResults(results).map((x) => (
-                                <li key={`${x.endpoint}-${x.name}`}>
-                                  <strong>
-                                    {x.endpoint.replace("pred_", "")}:
-                                  </strong>{" "}
-                                  {x.name}{" "}
-                                  {x.prob !== null && x.prob !== undefined ? (
-                                    <span style={{ color: "#6b7280" }}>
-                                      ({formatProb(x.prob)})
-                                    </span>
-                                  ) : null}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
+                              ◀
+                            </button>
 
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "flex-end",
-                            marginTop: "2px",
-                          }}
-                        >
-                          <Button
+                            <div style={{ fontWeight: 800 }}>
+                              {safeIdx + 1} / {results.length}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRowIdx((v) => Math.min(results.length - 1, v + 1))}
+                              disabled={safeIdx === results.length - 1}
+                              style={{
+                                border: "1px solid #e5e7eb",
+                                background: "white",
+                                borderRadius: "10px",
+                                padding: "6px 10px",
+                                cursor: safeIdx === results.length - 1 ? "not-allowed" : "pointer",
+                                opacity: safeIdx === results.length - 1 ? 0.5 : 1,
+                                fontWeight: 800,
+                              }}
+                            >
+                              ▶
+                            </button>
+
+                            <div style={{ marginLeft: "auto", color: "#6b7280", fontSize: "0.9rem" }}>
+                              Modelo ganador: <strong>{r.top_endpoint || "-"}</strong>
+                            </div>
+                          </div>
+
+                          {/* Predicción + % */}
+                          <div
                             style={{
-                              backgroundColor: "rgb(108, 99, 255)",
-                              color: "white",
-                              padding: "8px 16px",
-                              borderRadius: "6px",
+                              border: "1px solid #e5e7eb",
+                              borderRadius: "12px",
+                              padding: "14px 14px",
+                              background: "white",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: "12px",
+                              flexWrap: "wrap",
                             }}
-                            type="button"
-                            onClick={() => setResultsModalOpen(false)}
                           >
-                            Cerrar
-                          </Button>
+                            <div>
+                              <div style={{ color: "#6b7280", fontSize: "0.85rem", fontWeight: 700 }}>
+                                Predicción
+                              </div>
+                              <div style={{ fontSize: "1.25rem", fontWeight: 950, color: "#111827" }}>
+                                {pred || "(sin predicción)"}
+                              </div>
+                            </div>
+
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ color: "#6b7280", fontSize: "0.85rem", fontWeight: 700 }}>
+                                Probabilidad
+                              </div>
+                              <div style={{ fontSize: "1.25rem", fontWeight: 950, color: "#111827" }}>
+                                {Number.isFinite(prob) ? toPercent2(prob) : "-"}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Torta */}
+                          <div
+                            style={{
+                              border: "1px solid #e5e7eb",
+                              borderRadius: "12px",
+                              padding: "12px",
+                              background: "#fafafa",
+                            }}
+                          >
+                            <div style={{ fontWeight: 900, color: "#111827", marginBottom: "8px" }}>
+                              Probabilidad (torta)
+                            </div>
+
+                            <div style={{ width: "100%", height: 320 }}>
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Tooltip
+                                    formatter={(value, name) => {
+                                      const v = Number(value);
+                                      if (!Number.isFinite(v)) return ["-", name];
+                                      return [toPercent2(v), name];
+                                    }}
+                                  />
+                                  <Pie
+                                    data={pieData}
+                                    dataKey="value"
+                                    nameKey="name"
+                                    innerRadius="55%"
+                                    outerRadius="85%"
+                                    label={({ name, value }) => `${name}: ${toPercent2(value)}`}
+                                  />
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+
+                            <div style={{ color: "#6b7280", fontSize: "0.85rem" }}>
+                              La torta muestra <strong>Probabilidad</strong> vs <strong>Resto</strong> (1 - probabilidad).
+                            </div>
+                          </div>
+
+                          {/* Botón cerrar */}
+                          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "2px" }}>
+                            <Button
+                              style={{
+                                backgroundColor: "rgb(108, 99, 255)",
+                                color: "white",
+                                padding: "8px 16px",
+                                borderRadius: "6px",
+                              }}
+                              type="button"
+                              onClick={() => setResultsModalOpen(false)}
+                            >
+                              Cerrar
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()
+                  )}
                 </div>
               </div>
             </div>
