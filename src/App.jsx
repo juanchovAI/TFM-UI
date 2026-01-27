@@ -431,7 +431,7 @@ export default function App() {
                 <Progress value={progress} className="mt-2" />
               </div>
 
-              {results.length > 0 && (
+              {results.length > 0 && progress === 100 && (
                 <div style={{ display: "flex", justifyContent: "center", marginTop: "14px" }}>
                   <Button
                     type="button"
@@ -442,7 +442,7 @@ export default function App() {
                       fontWeight: "bold",
                     }}
                   >
-                    Ver mejores resultados (3 cards)
+                    Ver resultados
                   </Button>
                 </div>
               )}
