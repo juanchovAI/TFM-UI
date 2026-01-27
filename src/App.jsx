@@ -17,6 +17,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 import { Separator } from "@/components/ui/separator";
 import "./App.css";
 import researchingSvg from "./assets/undraw_researching_49yy.svg";
@@ -57,6 +66,45 @@ function getTopPopularResults(results) {
   }));
 }
 
+function buildDistribution(results, predKey, probKey, topN = 8) {
+  const map = new Map();
+
+  for (const r of results || []) {
+    const label = (r?.[predKey] ?? "").toString().trim();
+    if (!label) continue;
+
+    const prob = parseFloat(r?.[probKey]);
+    const prev = map.get(label) || {
+      name: label,
+      count: 0,
+      probSum: 0,
+      probCount: 0,
+    };
+
+    prev.count += 1;
+    if (!Number.isNaN(prob)) {
+      prev.probSum += prob;
+      prev.probCount += 1;
+    }
+
+    map.set(label, prev);
+  }
+
+  const arr = [...map.values()].map((x) => ({
+    name: x.name,
+    count: x.count,
+    avgProb: x.probCount ? x.probSum / x.probCount : null,
+  }));
+
+  arr.sort((a, b) => b.count - a.count);
+  return arr.slice(0, topN);
+}
+
+function formatProb(p) {
+  if (p === null || p === undefined || Number.isNaN(p)) return "";
+  return `${(p * 100).toFixed(1)}%`;
+}
+
 export default function App() {
   const [fileName, setFileName] = useState(null);
   const [rows, setRows] = useState([]);
@@ -66,6 +114,7 @@ export default function App() {
   const [fileObj, setFileObj] = useState(null);
   const fileInputRef = useRef(null);
   const [toast, setToast] = useState({ show: false, text: "", type: "info" });
+  const [resultsModalOpen, setResultsModalOpen] = useState(false);
 
   // ✅ Modal desde cero
   const [colsModalOpen, setColsModalOpen] = useState(false);
@@ -179,9 +228,15 @@ export default function App() {
           } catch (ex) {
             console.error("Failed to read error body", ex);
           }
-          showToast(`Error ${status} from server: ${body || "[no body]"}`, "error");
+          showToast(
+            `Error ${status} from server: ${body || "[no body]"}`,
+            "error"
+          );
         } else {
-          showToast(`Network/error while predicting: ${e.message || e}`, "error");
+          showToast(
+            `Network/error while predicting: ${e.message || e}`,
+            "error"
+          );
         }
         setRunning(false);
         return;
@@ -189,8 +244,10 @@ export default function App() {
       const rowResult = {};
       res.forEach((r) => {
         if (r && r.data) {
-          rowResult[`pred_${r.name}`] = r.data.prediccion ?? r.data.prediction ?? "";
-          rowResult[`prob_${r.name}`] = r.data.probabilidad ?? r.data.probability ?? null;
+          rowResult[`pred_${r.name}`] =
+            r.data.prediccion ?? r.data.prediction ?? "";
+          rowResult[`prob_${r.name}`] =
+            r.data.probabilidad ?? r.data.probability ?? null;
         } else {
           rowResult[`pred_${r.name}`] = "";
           rowResult[`prob_${r.name}`] = null;
@@ -214,6 +271,7 @@ export default function App() {
 
     setRunning(false);
     setProgress(100);
+    setResultsModalOpen(true);
   }
 
   // ✅ Cerrar modal con tecla ESC (sin librerías)
@@ -240,7 +298,8 @@ export default function App() {
           width: "70%",
         }}
       >
-        Herramienta web inteligente de predicción del acceso a la educación inclusiva en Bogotá
+        Herramienta web inteligente de predicción del acceso a la educación
+        inclusiva en Bogotá
       </h1>
 
       <Card
@@ -257,7 +316,13 @@ export default function App() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle>
-                  <div style={{ color: "#6c63ff", fontSize: "2rem", fontWeight: "bold" }}>
+                  <div
+                    style={{
+                      color: "#6c63ff",
+                      fontSize: "2rem",
+                      fontWeight: "bold",
+                    }}
+                  >
                     ¿Cómo usar la herramienta y qué hace?
                   </div>
                 </CardTitle>
@@ -273,37 +338,45 @@ export default function App() {
                 </div>
 
                 <p className="mb-3">
-                  Esta herramienta permite <strong>cargar un archivo Excel o CSV</strong> con registros
-                  de personas con discapacidad y generar, de forma automática, predicciones que apoyan
-                  la toma de decisiones en educación inclusiva.
+                  Esta herramienta permite{" "}
+                  <strong>cargar un archivo Excel o CSV</strong> con registros
+                  de personas con discapacidad y generar, de forma automática,
+                  predicciones que apoyan la toma de decisiones en educación
+                  inclusiva.
                 </p>
 
                 <p className="mb-3">
-                  Al ejecutar las predicciones, el sistema consulta tres servicios (endpoints) y devuelve:
+                  Al ejecutar las predicciones, el sistema consulta tres
+                  servicios (endpoints) y devuelve:
                 </p>
 
                 <ul className="list-disc pl-5 space-y-1 mb-3">
                   <li>
-                    <strong>Asiste</strong>: estima si la persona asiste actualmente a una institución educativa.
+                    <strong>Asiste</strong>: estima si la persona asiste
+                    actualmente a una institución educativa.
                   </li>
                   <li>
-                    <strong>Causa</strong>: sugiere la causa más probable por la cual una persona no estudia.
+                    <strong>Causa</strong>: sugiere la causa más probable por la
+                    cual una persona no estudia.
                   </li>
                   <li>
-                    <strong>Nivel</strong>: estima el nivel educativo asociado/requerido según el perfil.
+                    <strong>Nivel</strong>: estima el nivel educativo
+                    asociado/requerido según el perfil.
                   </li>
                 </ul>
 
                 <p className="mb-3">
-                  El resultado se muestra con su probabilidad y un resumen de los resultados
-                  más frecuentes. La herramienta está pensada como un apoyo para análisis y
-                  priorización institucional; no reemplaza la valoración profesional.
+                  El resultado se muestra con su probabilidad y un resumen de
+                  los resultados más frecuentes. La herramienta está pensada
+                  como un apoyo para análisis y priorización institucional; no
+                  reemplaza la valoración profesional.
                 </p>
 
                 {/* ✅ Nota + botón abre modal */}
                 <p className="text-xs text-neutral-600">
-                  Nota: asegúrate de que tu archivo contenga las columnas requeridas (si faltan, el sistema las completa
-                  con valores vacíos para mantener la estructura esperada).{" "}
+                  Nota: asegúrate de que tu archivo contenga las columnas
+                  requeridas (si faltan, el sistema las completa con valores
+                  vacíos para mantener la estructura esperada).{" "}
                   <button
                     type="button"
                     onClick={() => setColsModalOpen(true)}
@@ -325,10 +398,18 @@ export default function App() {
             </Card>
           </div>
 
-          <div style={{ background: "#6c63ff", borderRadius: "10px", color: "white", padding: "1.5rem" }}>
+          <div
+            style={{
+              background: "#6c63ff",
+              borderRadius: "10px",
+              color: "white",
+              padding: "1.5rem",
+            }}
+          >
             <div className="mb-4">
               <Label>
-                Sube tu archivo (.xlsx/.csv) y usa los botones para ejecutar predicciones y ver los resultados.
+                Sube tu archivo (.xlsx/.csv) y usa los botones para ejecutar
+                predicciones y ver los resultados.
               </Label>
             </div>
 
@@ -340,7 +421,8 @@ export default function App() {
                 accept=".xlsx,.xls,.csv"
                 onChange={(e) => {
                   console.log("file input change", e.target.files);
-                  if (e.target.files && e.target.files[0]) readFile(e.target.files[0]);
+                  if (e.target.files && e.target.files[0])
+                    readFile(e.target.files[0]);
                 }}
                 className="hidden"
               />
@@ -348,14 +430,25 @@ export default function App() {
               <div>
                 <Button
                   onClick={() => {
-                    const el = fileInputRef?.current || document.getElementById("fileInput");
+                    const el =
+                      fileInputRef?.current ||
+                      document.getElementById("fileInput");
                     if (el) el.click();
                     else console.warn("file input not found");
                   }}
                   style={
                     fileName
-                      ? { background: "#6c63ff", color: "white", fontWeight: "bold", border: "1px solid white" }
-                      : { background: "white", color: "#6c63ff", fontWeight: "bold" }
+                      ? {
+                          background: "#6c63ff",
+                          color: "white",
+                          fontWeight: "bold",
+                          border: "1px solid white",
+                        }
+                      : {
+                          background: "white",
+                          color: "#6c63ff",
+                          fontWeight: "bold",
+                        }
                   }
                 >
                   {fileName ? "Cambiar archivo" : "Subir archivo"}
@@ -363,7 +456,10 @@ export default function App() {
 
                 {fileName && (
                   <div style={{ color: "whitesmoke", marginTop: "1rem" }}>
-                    <span style={{ fontWeight: "bold" }}>Nombre de archivo subido:</span> {fileName}
+                    <span style={{ fontWeight: "bold" }}>
+                      Nombre de archivo subido:
+                    </span>{" "}
+                    {fileName}
                   </div>
                 )}
 
@@ -374,14 +470,31 @@ export default function App() {
                 )}
 
                 {fileName && (
-                  <div style={{ display: "flex", alignItems: "center", marginTop: "1rem", width: "100%", justifyContent: "center" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      marginTop: "1rem",
+                      width: "100%",
+                      justifyContent: "center",
+                    }}
+                  >
                     <Button
                       onClick={runPredictions}
                       disabled={running}
                       style={
                         running
-                          ? { background: "grey", color: "white", fontWeight: "bold", pointerEvents: "none" }
-                          : { background: "white", color: "#6c63ff", fontWeight: "bold" }
+                          ? {
+                              background: "grey",
+                              color: "white",
+                              fontWeight: "bold",
+                              pointerEvents: "none",
+                            }
+                          : {
+                              background: "white",
+                              color: "#6c63ff",
+                              fontWeight: "bold",
+                            }
                       }
                     >
                       {running ? "Ejecutando..." : "Ejecutar predicciones"}
@@ -399,29 +512,27 @@ export default function App() {
                 <Progress value={progress} className="mt-2" />
               </div>
 
-              <div className="overflow-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Variable</TableHead>
-                      <TableHead>Predicción</TableHead>
-                      <TableHead>Probabilidad</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {["asiste", "causa", "nivel"].map((endpoint) => {
-                      const item = getTopPopularResults(results).find((r) => r.endpoint === `pred_${endpoint}`);
-                      return (
-                        <TableRow key={endpoint}>
-                          <TableCell>{endpoint}</TableCell>
-                          <TableCell>{item ? item.name : ""}</TableCell>
-                          <TableCell>{item ? item.prob : ""}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
+              {results.length > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    marginTop: "14px",
+                  }}
+                >
+                  <Button
+                    type="button"
+                    onClick={() => setResultsModalOpen(true)}
+                    style={{
+                      background: "white",
+                      color: "#6c63ff",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Ver resultados (gráficas)
+                  </Button>
+                </div>
+              )}
             </>
           )}
 
@@ -463,11 +574,24 @@ export default function App() {
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#111827" }}>
+                    <div
+                      style={{
+                        fontSize: "1.05rem",
+                        fontWeight: 800,
+                        color: "#111827",
+                      }}
+                    >
                       Columnas requeridas del archivo
                     </div>
-                    <div style={{ fontSize: "0.85rem", color: "#6b7280", marginTop: "4px" }}>
-                      Si alguna columna falta, se completará vacía para mantener la estructura.
+                    <div
+                      style={{
+                        fontSize: "0.85rem",
+                        color: "#6b7280",
+                        marginTop: "4px",
+                      }}
+                    >
+                      Si alguna columna falta, se completará vacía para mantener
+                      la estructura.
                     </div>
                   </div>
 
@@ -499,10 +623,31 @@ export default function App() {
                       background: "#fafafa",
                     }}
                   >
-                    <ol style={{ margin: 0, paddingLeft: "1.25rem", lineHeight: 1.55 }}>
+                    <ol
+                      style={{
+                        margin: 0,
+                        paddingLeft: "1.25rem",
+                        lineHeight: 1.55,
+                      }}
+                    >
                       {requiredFields.map((c) => (
-                        <li key={c} style={{ padding: "4px 0", color: "#111827", fontSize: "0.9rem" }}>
-                          <code style={{ fontSize: "0.82rem", background: "white", border: "1px solid #e5e7eb", padding: "2px 6px", borderRadius: "6px" }}>
+                        <li
+                          key={c}
+                          style={{
+                            padding: "4px 0",
+                            color: "#111827",
+                            fontSize: "0.9rem",
+                          }}
+                        >
+                          <code
+                            style={{
+                              fontSize: "0.82rem",
+                              background: "white",
+                              border: "1px solid #e5e7eb",
+                              padding: "2px 6px",
+                              borderRadius: "6px",
+                            }}
+                          >
                             {c}
                           </code>
                         </li>
@@ -510,11 +655,298 @@ export default function App() {
                     </ol>
                   </div>
 
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "12px" }}>
-                    <Button style={{backgroundColor: "rgb(108, 99, 255)", color: "white", padding: "8px 16px", borderRadius: "6px"}} type="button" onClick={() => setColsModalOpen(false)}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      marginTop: "12px",
+                    }}
+                  >
+                    <Button
+                      style={{
+                        backgroundColor: "rgb(108, 99, 255)",
+                        color: "white",
+                        padding: "8px 16px",
+                        borderRadius: "6px",
+                      }}
+                      type="button"
+                      onClick={() => setColsModalOpen(false)}
+                    >
                       Cerrar
                     </Button>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {resultsModalOpen && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              onClick={() => setResultsModalOpen(false)}
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.55)",
+                zIndex: 9999,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "1rem",
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  width: "min(980px, 96vw)",
+                  background: "white",
+                  borderRadius: "12px",
+                  boxShadow: "0 18px 60px rgba(0,0,0,0.35)",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "16px 18px",
+                    borderBottom: "1px solid #e5e7eb",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "1.05rem",
+                        fontWeight: 900,
+                        color: "#111827",
+                      }}
+                    >
+                      Resultados de predicción (resumen en gráficas)
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "0.85rem",
+                        color: "#6b7280",
+                        marginTop: "4px",
+                      }}
+                    >
+                      Registros procesados: <strong>{results.length}</strong> /{" "}
+                      {rows.length}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setResultsModalOpen(false)}
+                    aria-label="Cerrar"
+                    style={{
+                      border: "1px solid #e5e7eb",
+                      borderRadius: "999px",
+                      padding: "6px 10px",
+                      cursor: "pointer",
+                      background: "white",
+                      fontWeight: 800,
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div style={{ padding: "14px 18px" }}>
+                  {/* Construimos datos TOP por endpoint */}
+                  {(() => {
+                    const dataAsiste = buildDistribution(
+                      results,
+                      "pred_asiste",
+                      "prob_asiste",
+                      8
+                    );
+                    const dataCausa = buildDistribution(
+                      results,
+                      "pred_causa",
+                      "prob_causa",
+                      8
+                    );
+                    const dataNivel = buildDistribution(
+                      results,
+                      "pred_nivel",
+                      "prob_nivel",
+                      8
+                    );
+
+                    const ChartBlock = ({ title, data }) => (
+                      <div
+                        style={{
+                          border: "1px solid #e5e7eb",
+                          borderRadius: "12px",
+                          padding: "12px",
+                          background: "#fafafa",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontWeight: 900,
+                            color: "#111827",
+                            marginBottom: "8px",
+                          }}
+                        >
+                          {title}
+                        </div>
+
+                        {!data || data.length === 0 ? (
+                          <div style={{ color: "#6b7280", fontSize: "0.9rem" }}>
+                            Aún no hay datos para graficar.
+                          </div>
+                        ) : (
+                          <div style={{ width: "100%", height: 280 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart
+                                data={data}
+                                margin={{
+                                  top: 10,
+                                  right: 16,
+                                  bottom: 40,
+                                  left: 0,
+                                }}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis
+                                  dataKey="name"
+                                  interval={0}
+                                  angle={-18}
+                                  textAnchor="end"
+                                  height={60}
+                                />
+                                <YAxis allowDecimals={false} />
+                                <Tooltip
+                                  formatter={(value, name, props) => {
+                                    if (name === "count")
+                                      return [value, "Frecuencia"];
+                                    return [value, name];
+                                  }}
+                                  labelFormatter={(label) =>
+                                    `Categoría: ${label}`
+                                  }
+                                  contentStyle={{ fontSize: "0.9rem" }}
+                                />
+                                <Bar dataKey="count" />
+                              </BarChart>
+                            </ResponsiveContainer>
+
+                            {/* Mini resumen con prob promedio */}
+                            <div
+                              style={{
+                                marginTop: "8px",
+                                fontSize: "0.85rem",
+                                color: "#374151",
+                              }}
+                            >
+                              <strong>Tip:</strong> en el tooltip estás viendo
+                              la frecuencia; si quieres, también podemos
+                              graficar <em>promedio de probabilidad</em>{" "}
+                              (avgProb) o la prob del top-1.
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+
+                    return (
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr",
+                          gap: "12px",
+                        }}
+                      >
+                        <ChartBlock
+                          title="Asiste — Top categorías más frecuentes"
+                          data={dataAsiste}
+                        />
+                        <ChartBlock
+                          title="Causa — Top categorías más frecuentes"
+                          data={dataCausa}
+                        />
+                        <ChartBlock
+                          title="Nivel — Top categorías más frecuentes"
+                          data={dataNivel}
+                        />
+
+                        {/* Resumen Top-3 global (opcional) */}
+                        <div
+                          style={{
+                            border: "1px solid #e5e7eb",
+                            borderRadius: "12px",
+                            padding: "12px",
+                            background: "white",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontWeight: 900,
+                              color: "#111827",
+                              marginBottom: "8px",
+                            }}
+                          >
+                            Resumen (Top 3 global por popularidad)
+                          </div>
+
+                          {getTopPopularResults(results).length === 0 ? (
+                            <div
+                              style={{ color: "#6b7280", fontSize: "0.9rem" }}
+                            >
+                              Sin resultados aún.
+                            </div>
+                          ) : (
+                            <ul
+                              style={{
+                                margin: 0,
+                                paddingLeft: "1.1rem",
+                                lineHeight: 1.6,
+                              }}
+                            >
+                              {getTopPopularResults(results).map((x) => (
+                                <li key={`${x.endpoint}-${x.name}`}>
+                                  <strong>
+                                    {x.endpoint.replace("pred_", "")}:
+                                  </strong>{" "}
+                                  {x.name}{" "}
+                                  {x.prob !== null && x.prob !== undefined ? (
+                                    <span style={{ color: "#6b7280" }}>
+                                      ({formatProb(x.prob)})
+                                    </span>
+                                  ) : null}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "flex-end",
+                            marginTop: "2px",
+                          }}
+                        >
+                          <Button
+                            style={{
+                              backgroundColor: "rgb(108, 99, 255)",
+                              color: "white",
+                              padding: "8px 16px",
+                              borderRadius: "6px",
+                            }}
+                            type="button"
+                            onClick={() => setResultsModalOpen(false)}
+                          >
+                            Cerrar
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
