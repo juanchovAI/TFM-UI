@@ -11,56 +11,49 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 
-import {
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Tooltip,
-} from "recharts";
-
 import "./App.css";
 import researchingSvg from "./assets/undraw_researching_49yy.svg";
 
-// Utilidad para mostrar solo los tres más populares y, si se repiten, solo el de mayor probabilidad
-function getTopPopularResults(results) {
-  if (!Array.isArray(results) || results.length === 0) return [];
-  const freq = {};
-  results.forEach((row, idx) => {
-    ["pred_causa", "pred_asiste", "pred_nivel"].forEach((key) => {
-      const val = row[key];
-      if (val) {
-        if (!freq[val]) freq[val] = [];
-        freq[val].push({
-          idx,
-          prob: parseFloat(row[`prob_${key.split("_")[1]}`]) || 0,
-          endpoint: key,
-        });
-      }
-    });
-  });
-  const sorted = Object.entries(freq)
-    .map(([name, arr]) => {
-      const best = arr.reduce((a, b) => (a.prob > b.prob ? a : b));
-      return {
-        name,
-        count: arr.length,
-        best,
-      };
-    })
-    .sort((a, b) => b.count - a.count);
-  const top3 = sorted.slice(0, 3);
-  return top3.map((item) => ({
-    name: item.name,
-    endpoint: item.best.endpoint,
-    prob: item.best.prob,
-    idx: item.best.idx,
-  }));
-}
-
 function toPercent2(prob01) {
   const p = Number(prob01);
-  if (!Number.isFinite(p)) return "";
+  if (!Number.isFinite(p)) return "-";
   return `${(p * 100).toFixed(2)}%`;
+}
+
+function getScoreBg(prob01) {
+  const p = Number(prob01);
+  if (!Number.isFinite(p)) return "#f59e0b"; // naranja por defecto
+  if (p >= 0.8) return "#16a34a"; // verde
+  if (p <= 0.2) return "#dc2626"; // rojo
+  return "#f59e0b"; // naranja
+}
+
+function getBestPerEndpoint(results, endpoint) {
+  // endpoint: "asiste" | "causa" | "nivel"
+  if (!Array.isArray(results) || results.length === 0) return null;
+  const predKey = `pred_${endpoint}`;
+  const probKey = `prob_${endpoint}`;
+
+  let best = null;
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i] || {};
+    const pred = (r[predKey] ?? "").toString().trim();
+    const prob = Number(r[probKey]);
+
+    // si no hay predicción, no lo consideramos
+    if (!pred) continue;
+
+    if (!best) best = { endpoint, pred, prob, idx: i };
+    else {
+      const bestProb = Number(best.prob);
+      if (!Number.isFinite(bestProb) && Number.isFinite(prob)) {
+        best = { endpoint, pred, prob, idx: i };
+      } else if (Number.isFinite(prob) && prob > bestProb) {
+        best = { endpoint, pred, prob, idx: i };
+      }
+    }
+  }
+  return best;
 }
 
 export default function App() {
@@ -76,9 +69,8 @@ export default function App() {
   // ✅ Modal columnas requeridas
   const [colsModalOpen, setColsModalOpen] = useState(false);
 
-  // ✅ Modal resultados
+  // ✅ Modal resultados (3 cards: asiste/causa/nivel)
   const [resultsModalOpen, setResultsModalOpen] = useState(false);
-  const [selectedRowIdx, setSelectedRowIdx] = useState(0);
 
   function showToast(text, type = "info", ms = 4000) {
     setToast({ show: true, text, type });
@@ -212,33 +204,12 @@ export default function App() {
         }
       });
 
-      // Elegir la mejor predicción (top-1) por probabilidad entre causa/asiste/nivel
-      const probs = ["prob_causa", "prob_asiste", "prob_nivel"];
-      let top = null;
-      let topVal = -1;
-
-      probs.forEach((p) => {
-        const v = parseFloat(rowResult[p]);
-        if (!Number.isNaN(v) && v > topVal) {
-          topVal = v;
-          top = p.replace("prob_", "");
-        }
-      });
-
-      rowResult.top_endpoint = top; // "causa" | "asiste" | "nivel"
-      rowResult.top_prob = topVal === -1 ? null : topVal;
-
-      // Guardar el texto de la predicción ganadora
-      const predKey = top ? `pred_${top}` : null;
-      rowResult.top_pred = predKey ? (rowResult[predKey] ?? "") : "";
-
       setResults((prev) => [...prev, rowResult]);
       setProgress(Math.round(((i + 1) / rows.length) * 100));
     }
 
     setRunning(false);
     setProgress(100);
-    setSelectedRowIdx(0);
     setResultsModalOpen(true);
   }
 
@@ -253,6 +224,48 @@ export default function App() {
     if (colsModalOpen || resultsModalOpen) window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [colsModalOpen, resultsModalOpen]);
+
+  // 👇 Calculamos los 3 “mejores globales” por endpoint
+  const bestAsiste = getBestPerEndpoint(results, "asiste");
+  const bestCausa = getBestPerEndpoint(results, "causa");
+  const bestNivel = getBestPerEndpoint(results, "nivel");
+
+  const ResultCard = ({ title, item }) => {
+    const bg = getScoreBg(item?.prob);
+    return (
+      <div
+        style={{
+          borderRadius: "14px",
+          padding: "14px",
+          color: "white",
+          background: bg,
+          boxShadow: "0 10px 28px rgba(0,0,0,0.15)",
+          display: "grid",
+          gap: "6px",
+        }}
+      >
+        <div style={{ fontWeight: 900, fontSize: "1.05rem" }}>{title}</div>
+
+        <div style={{ fontSize: "0.9rem", opacity: 0.95 }}>
+          <strong>Predicción:</strong>{" "}
+          <span style={{ fontWeight: 900 }}>
+            {item?.pred ? item.pred : "(sin predicción)"}
+          </span>
+        </div>
+
+        <div style={{ fontSize: "0.9rem", opacity: 0.95 }}>
+          <strong>Probabilidad:</strong>{" "}
+          <span style={{ fontWeight: 900 }}>{toPercent2(item?.prob)}</span>
+        </div>
+
+        {Number.isFinite(Number(item?.idx)) && (
+          <div style={{ fontSize: "0.82rem", opacity: 0.9 }}>
+            Registro donde ocurrió: <strong>#{Number(item.idx) + 1}</strong>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div
@@ -427,17 +440,14 @@ export default function App() {
                 <div style={{ display: "flex", justifyContent: "center", marginTop: "14px" }}>
                   <Button
                     type="button"
-                    onClick={() => {
-                      setSelectedRowIdx(0);
-                      setResultsModalOpen(true);
-                    }}
+                    onClick={() => setResultsModalOpen(true)}
                     style={{
                       background: "white",
                       color: "#6c63ff",
                       fontWeight: "bold",
                     }}
                   >
-                    Ver resultados (torta)
+                    Ver mejores resultados (3 cards)
                   </Button>
                 </div>
               )}
@@ -556,7 +566,7 @@ export default function App() {
             </div>
           )}
 
-          {/* ✅ MODAL resultados: SOLO predicción + % + torta */}
+          {/* ✅ MODAL resultados (3 mejores por endpoint) */}
           {resultsModalOpen && (
             <div
               role="dialog"
@@ -595,10 +605,10 @@ export default function App() {
                 >
                   <div>
                     <div style={{ fontSize: "1.05rem", fontWeight: 900, color: "#111827" }}>
-                      Resultado (predicción + probabilidad)
+                      Mejores resultados por modelo (asiste / causa / nivel)
                     </div>
                     <div style={{ fontSize: "0.85rem", color: "#6b7280", marginTop: "4px" }}>
-                      Registros procesados: <strong>{results.length}</strong> / {rows.length}
+                      Se muestra la predicción con mayor probabilidad encontrada en todos los registros.
                     </div>
                   </div>
 
@@ -620,172 +630,36 @@ export default function App() {
                 </div>
 
                 <div style={{ padding: "14px 18px" }}>
-                  {results.length === 0 ? (
-                    <div style={{ color: "#6b7280" }}>Aún no hay resultados para mostrar.</div>
-                  ) : (
-                    (() => {
-                      const safeIdx = Math.min(Math.max(selectedRowIdx, 0), results.length - 1);
-                      const r = results[safeIdx] || {};
-                      const prob = Number(r.top_prob);
-                      const pred = (r.top_pred ?? "").toString();
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(1, 1fr)",
+                      gap: "12px",
+                    }}
+                  >
+                    <ResultCard title="Asiste (mejor probabilidad)" item={bestAsiste} />
+                    <ResultCard title="Causa (mejor probabilidad)" item={bestCausa} />
+                    <ResultCard title="Nivel (mejor probabilidad)" item={bestNivel} />
+                  </div>
 
-                      const pieData = [
-                        { name: "Probabilidad", value: Number.isFinite(prob) ? prob : 0 },
-                        { name: "Resto", value: Number.isFinite(prob) ? Math.max(0, 1 - prob) : 1 },
-                      ];
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "14px" }}>
+                    <Button
+                      style={{
+                        backgroundColor: "rgb(108, 99, 255)",
+                        color: "white",
+                        padding: "8px 16px",
+                        borderRadius: "6px",
+                      }}
+                      type="button"
+                      onClick={() => setResultsModalOpen(false)}
+                    >
+                      Cerrar
+                    </Button>
+                  </div>
 
-                      return (
-                        <div style={{ display: "grid", gap: "12px" }}>
-                          {/* Selector de registro */}
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "10px",
-                              flexWrap: "wrap",
-                              border: "1px solid #e5e7eb",
-                              borderRadius: "12px",
-                              padding: "10px 12px",
-                              background: "#fafafa",
-                            }}
-                          >
-                            <div style={{ fontWeight: 900, color: "#111827" }}>Registro:</div>
-
-                            <button
-                              type="button"
-                              onClick={() => setSelectedRowIdx((v) => Math.max(0, v - 1))}
-                              disabled={safeIdx === 0}
-                              style={{
-                                border: "1px solid #e5e7eb",
-                                background: "white",
-                                borderRadius: "10px",
-                                padding: "6px 10px",
-                                cursor: safeIdx === 0 ? "not-allowed" : "pointer",
-                                opacity: safeIdx === 0 ? 0.5 : 1,
-                                fontWeight: 800,
-                              }}
-                            >
-                              ◀
-                            </button>
-
-                            <div style={{ fontWeight: 800 }}>
-                              {safeIdx + 1} / {results.length}
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => setSelectedRowIdx((v) => Math.min(results.length - 1, v + 1))}
-                              disabled={safeIdx === results.length - 1}
-                              style={{
-                                border: "1px solid #e5e7eb",
-                                background: "white",
-                                borderRadius: "10px",
-                                padding: "6px 10px",
-                                cursor: safeIdx === results.length - 1 ? "not-allowed" : "pointer",
-                                opacity: safeIdx === results.length - 1 ? 0.5 : 1,
-                                fontWeight: 800,
-                              }}
-                            >
-                              ▶
-                            </button>
-
-                            <div style={{ marginLeft: "auto", color: "#6b7280", fontSize: "0.9rem" }}>
-                              Modelo ganador: <strong>{r.top_endpoint || "-"}</strong>
-                            </div>
-                          </div>
-
-                          {/* Predicción + % */}
-                          <div
-                            style={{
-                              border: "1px solid #e5e7eb",
-                              borderRadius: "12px",
-                              padding: "14px 14px",
-                              background: "white",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              gap: "12px",
-                              flexWrap: "wrap",
-                            }}
-                          >
-                            <div>
-                              <div style={{ color: "#6b7280", fontSize: "0.85rem", fontWeight: 700 }}>
-                                Predicción
-                              </div>
-                              <div style={{ fontSize: "1.25rem", fontWeight: 950, color: "#111827" }}>
-                                {pred || "(sin predicción)"}
-                              </div>
-                            </div>
-
-                            <div style={{ textAlign: "right" }}>
-                              <div style={{ color: "#6b7280", fontSize: "0.85rem", fontWeight: 700 }}>
-                                Probabilidad
-                              </div>
-                              <div style={{ fontSize: "1.25rem", fontWeight: 950, color: "#111827" }}>
-                                {Number.isFinite(prob) ? toPercent2(prob) : "-"}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Torta */}
-                          <div
-                            style={{
-                              border: "1px solid #e5e7eb",
-                              borderRadius: "12px",
-                              padding: "12px",
-                              background: "#fafafa",
-                            }}
-                          >
-                            <div style={{ fontWeight: 900, color: "#111827", marginBottom: "8px" }}>
-                              Probabilidad (torta)
-                            </div>
-
-                            <div style={{ width: "100%", height: 320 }}>
-                              <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                  <Tooltip
-                                    formatter={(value, name) => {
-                                      const v = Number(value);
-                                      if (!Number.isFinite(v)) return ["-", name];
-                                      return [toPercent2(v), name];
-                                    }}
-                                  />
-                                  <Pie
-                                    data={pieData}
-                                    dataKey="value"
-                                    nameKey="name"
-                                    innerRadius="55%"
-                                    outerRadius="85%"
-                                    label={({ name, value }) => `${name}: ${toPercent2(value)}`}
-                                  />
-                                </PieChart>
-                              </ResponsiveContainer>
-                            </div>
-
-                            <div style={{ color: "#6b7280", fontSize: "0.85rem" }}>
-                              La torta muestra <strong>Probabilidad</strong> vs <strong>Resto</strong> (1 - probabilidad).
-                            </div>
-                          </div>
-
-                          {/* Botón cerrar */}
-                          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "2px" }}>
-                            <Button
-                              style={{
-                                backgroundColor: "rgb(108, 99, 255)",
-                                color: "white",
-                                padding: "8px 16px",
-                                borderRadius: "6px",
-                              }}
-                              type="button"
-                              onClick={() => setResultsModalOpen(false)}
-                            >
-                              Cerrar
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })()
-                  )}
+                  <div style={{ marginTop: "10px", color: "#6b7280", fontSize: "0.85rem" }}>
+                    Regla de color: <strong>&gt;= 80%</strong> verde, <strong>&lt;= 20%</strong> rojo, en otro caso naranja.
+                  </div>
                 </div>
               </div>
             </div>
