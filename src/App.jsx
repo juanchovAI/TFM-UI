@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import axios from "axios";
 import pLimit from "p-limit";
 
-// Shadcn UI components (assumes project configured with shadcn and Tailwind)
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,10 +66,8 @@ export default function App() {
   const fileInputRef = useRef(null);
   const [toast, setToast] = useState({ show: false, text: "", type: "info" });
 
-  // ✅ Modal columnas requeridas
   const [colsModalOpen, setColsModalOpen] = useState(false);
 
-  // ✅ Modal resultados (3 cards: asiste/causa/nivel)
   const [resultsModalOpen, setResultsModalOpen] = useState(false);
 
   function showToast(text, type = "info", ms = 4000) {
@@ -213,7 +211,7 @@ export default function App() {
     setResultsModalOpen(true);
   }
 
-  // ✅ Cerrar modal con tecla ESC (sin librerías)
+  
   React.useEffect(() => {
     function onKeyDown(e) {
       if (e.key === "Escape") {
@@ -225,7 +223,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [colsModalOpen, resultsModalOpen]);
 
-  // 👇 Calculamos los 3 “mejores globales” por endpoint
+ 
   const bestAsiste = getBestPerEndpoint(results, "asiste");
   const bestCausa = getBestPerEndpoint(results, "causa");
   const bestNivel = getBestPerEndpoint(results, "nivel");
@@ -254,7 +252,7 @@ export default function App() {
         </div>
 
         <div style={{ fontSize: "0.9rem", opacity: 0.95 }}>
-          <strong>Probabilidad:</strong>{" "}
+          <strong>Fiabilidad:</strong>{" "}
           <span style={{ fontWeight: 900 }}>{toPercent2(item?.prob)}</span>
         </div>
 
@@ -316,7 +314,7 @@ export default function App() {
                 </p>
 
                 <p className="mb-3">
-                  Al al ejecutar vas a tener los siguientes respuestas
+                  Al ejecutar vas a tener los siguientes respuestas
                 </p>
 
                 <ul className="list-disc pl-5 space-y-1 mb-3">
@@ -561,7 +559,6 @@ export default function App() {
             </div>
           )}
 
-          {/* ✅ MODAL resultados (3 mejores por endpoint) */}
           {resultsModalOpen && (
             <div
               role="dialog"
