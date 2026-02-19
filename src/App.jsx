@@ -139,7 +139,7 @@ export default function App() {
     setResults([]);
     setProgress(0);
 
-    const BASE_URL = "http://jw00ccw4occ0sggc88884skc.217.216.91.112.sslip.io";
+    const BASE_URL = "https://jw00ccw4occ0sggc88884skc.217.216.91.112.sslip.io";
     const endpoints = {
       causa: `${BASE_URL}/predict/causa`,
       asiste: `${BASE_URL}/predict/asiste`,

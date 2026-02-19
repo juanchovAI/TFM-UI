@@ -15,7 +15,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/predict': {
-        target: 'http://jw00ccw4occ0sggc88884skc.217.216.91.112.sslip.io',
+        target: 'https://jw00ccw4occ0sggc88884skc.217.216.91.112.sslip.io',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path // keep path as-is
