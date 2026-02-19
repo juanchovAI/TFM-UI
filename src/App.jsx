@@ -3,7 +3,6 @@ import * as XLSX from "xlsx";
 import axios from "axios";
 import pLimit from "p-limit";
 
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -140,10 +139,11 @@ export default function App() {
     setResults([]);
     setProgress(0);
 
+    const BASE_URL = "http://jw00ccw4occ0sggc88884skc.217.216.91.112.sslip.io";
     const endpoints = {
-      causa: `/predict/causa`,
-      asiste: `/predict/asiste`,
-      nivel: `/predict/nivel`,
+      causa: `${BASE_URL}/predict/causa`,
+      asiste: `${BASE_URL}/predict/asiste`,
+      nivel: `${BASE_URL}/predict/nivel`,
     };
 
     const limit = pLimit(5);
@@ -161,8 +161,8 @@ export default function App() {
         limit(() =>
           axios
             .post(url, payload, { timeout: 30000 })
-            .then((r) => ({ name, data: r.data }))
-        )
+            .then((r) => ({ name, data: r.data })),
+        ),
       );
 
       let res;
@@ -183,9 +183,15 @@ export default function App() {
           } catch (ex) {
             console.error("Failed to read error body", ex);
           }
-          showToast(`Error ${status} from server: ${body || "[no body]"}`, "error");
+          showToast(
+            `Error ${status} from server: ${body || "[no body]"}`,
+            "error",
+          );
         } else {
-          showToast(`Network/error while predicting: ${e.message || e}`, "error");
+          showToast(
+            `Network/error while predicting: ${e.message || e}`,
+            "error",
+          );
         }
         setRunning(false);
         return;
@@ -194,8 +200,10 @@ export default function App() {
       const rowResult = {};
       res.forEach((r) => {
         if (r && r.data) {
-          rowResult[`pred_${r.name}`] = r.data.prediccion ?? r.data.prediction ?? "";
-          rowResult[`prob_${r.name}`] = r.data.probabilidad ?? r.data.probability ?? null;
+          rowResult[`pred_${r.name}`] =
+            r.data.prediccion ?? r.data.prediction ?? "";
+          rowResult[`prob_${r.name}`] =
+            r.data.probabilidad ?? r.data.probability ?? null;
         } else {
           rowResult[`pred_${r.name}`] = "";
           rowResult[`prob_${r.name}`] = null;
@@ -211,7 +219,6 @@ export default function App() {
     setResultsModalOpen(true);
   }
 
-  
   React.useEffect(() => {
     function onKeyDown(e) {
       if (e.key === "Escape") {
@@ -219,11 +226,11 @@ export default function App() {
         setResultsModalOpen(false);
       }
     }
-    if (colsModalOpen || resultsModalOpen) window.addEventListener("keydown", onKeyDown);
+    if (colsModalOpen || resultsModalOpen)
+      window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [colsModalOpen, resultsModalOpen]);
 
- 
   const bestAsiste = getBestPerEndpoint(results, "asiste");
   const bestCausa = getBestPerEndpoint(results, "causa");
   const bestNivel = getBestPerEndpoint(results, "nivel");
@@ -255,7 +262,6 @@ export default function App() {
           <strong>Fiabilidad:</strong>{" "}
           <span style={{ fontWeight: 900 }}>{toPercent2(item?.prob)}</span>
         </div>
-
       </div>
     );
   };
@@ -275,7 +281,8 @@ export default function App() {
           width: "70%",
         }}
       >
-        Herramienta web inteligente de predicción del acceso a la educación inclusiva en Bogotá
+        Herramienta web inteligente de predicción del acceso a la educación
+        inclusiva en Bogotá
       </h1>
 
       <Card
@@ -292,7 +299,13 @@ export default function App() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle>
-                  <div style={{ color: "#6c63ff", fontSize: "2rem", fontWeight: "bold" }}>
+                  <div
+                    style={{
+                      color: "#6c63ff",
+                      fontSize: "2rem",
+                      fontWeight: "bold",
+                    }}
+                  >
                     ¿Cómo usar la herramienta y qué hace?
                   </div>
                 </CardTitle>
@@ -308,9 +321,11 @@ export default function App() {
                 </div>
 
                 <p className="mb-3">
-                  Esta herramienta permite <strong>cargar un archivo Excel o CSV</strong> con registros
-                  de personas con discapacidad y generar, de forma automática, predicciones que apoyan
-                  la toma de decisiones en educación inclusiva.
+                  Esta herramienta permite{" "}
+                  <strong>cargar un archivo Excel o CSV</strong> con registros
+                  de personas con discapacidad y generar, de forma automática,
+                  predicciones que apoyan la toma de decisiones en educación
+                  inclusiva.
                 </p>
 
                 <p className="mb-3">
@@ -319,24 +334,33 @@ export default function App() {
 
                 <ul className="list-disc pl-5 space-y-1 mb-3">
                   <li>
-                    <strong>Asiste a institución educativa</strong>: estima si la persona asiste actualmente a una institución educativa.
+                    <strong>Asiste a institución educativa</strong>: estima si
+                    la persona asiste actualmente a una institución educativa.
                   </li>
                   <li>
-                    <strong>Causa por la que no asiste o no asistiría a institución educativa</strong>: sugiere la causa más probable por la cual una persona no estudia.
+                    <strong>
+                      Causa por la que no asiste o no asistiría a institución
+                      educativa
+                    </strong>
+                    : sugiere la causa más probable por la cual una persona no
+                    estudia.
                   </li>
                   <li>
-                    <strong>Nivel educativo alcanzado</strong>: estima el nivel educativo asociado/requerido según el perfil.
+                    <strong>Nivel educativo alcanzado</strong>: estima el nivel
+                    educativo asociado/requerido según el perfil.
                   </li>
                 </ul>
 
                 <p className="mb-3">
-                  El resultado se muestra con su probabilidad. La herramienta está pensada como un apoyo
-                  para análisis y priorización institucional; no reemplaza la valoración profesional.
+                  El resultado se muestra con su probabilidad. La herramienta
+                  está pensada como un apoyo para análisis y priorización
+                  institucional; no reemplaza la valoración profesional.
                 </p>
 
                 <p className="text-xs text-neutral-600">
-                  Nota: asegúrate de que tu archivo contenga las columnas requeridas (si faltan, el sistema las completa
-                  con valores vacíos para mantener la estructura esperada).{" "}
+                  Nota: asegúrate de que tu archivo contenga las columnas
+                  requeridas (si faltan, el sistema las completa con valores
+                  vacíos para mantener la estructura esperada).{" "}
                   <button
                     type="button"
                     onClick={() => setColsModalOpen(true)}
@@ -358,9 +382,19 @@ export default function App() {
             </Card>
           </div>
 
-          <div style={{ background: "#6c63ff", borderRadius: "10px", color: "white", padding: "1.5rem" }}>
+          <div
+            style={{
+              background: "#6c63ff",
+              borderRadius: "10px",
+              color: "white",
+              padding: "1.5rem",
+            }}
+          >
             <div className="mb-4">
-              <Label>Sube tu archivo (.xlsx/.csv) y usa los botones para ejecutar predicciones y ver los resultados.</Label>
+              <Label>
+                Sube tu archivo (.xlsx/.csv) y usa los botones para ejecutar
+                predicciones y ver los resultados.
+              </Label>
             </div>
 
             <div style={{ width: "100%", marginTop: "1rem" }}>
@@ -370,7 +404,8 @@ export default function App() {
                 type="file"
                 accept=".xlsx,.xls,.csv"
                 onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) readFile(e.target.files[0]);
+                  if (e.target.files && e.target.files[0])
+                    readFile(e.target.files[0]);
                 }}
                 className="hidden"
               />
@@ -378,14 +413,25 @@ export default function App() {
               <div>
                 <Button
                   onClick={() => {
-                    const el = fileInputRef?.current || document.getElementById("fileInput");
+                    const el =
+                      fileInputRef?.current ||
+                      document.getElementById("fileInput");
                     if (el) el.click();
                     else console.warn("file input not found");
                   }}
                   style={
                     fileName
-                      ? { background: "#6c63ff", color: "white", fontWeight: "bold", border: "1px solid white" }
-                      : { background: "white", color: "#6c63ff", fontWeight: "bold" }
+                      ? {
+                          background: "#6c63ff",
+                          color: "white",
+                          fontWeight: "bold",
+                          border: "1px solid white",
+                        }
+                      : {
+                          background: "white",
+                          color: "#6c63ff",
+                          fontWeight: "bold",
+                        }
                   }
                 >
                   {fileName ? "Cambiar archivo" : "Subir archivo"}
@@ -393,7 +439,10 @@ export default function App() {
 
                 {fileName && (
                   <div style={{ color: "whitesmoke", marginTop: "1rem" }}>
-                    <span style={{ fontWeight: "bold" }}>Nombre de archivo subido:</span> {fileName}
+                    <span style={{ fontWeight: "bold" }}>
+                      Nombre de archivo subido:
+                    </span>{" "}
+                    {fileName}
                   </div>
                 )}
 
@@ -404,14 +453,31 @@ export default function App() {
                 )}
 
                 {fileName && (
-                  <div style={{ display: "flex", alignItems: "center", marginTop: "1rem", width: "100%", justifyContent: "center" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      marginTop: "1rem",
+                      width: "100%",
+                      justifyContent: "center",
+                    }}
+                  >
                     <Button
                       onClick={runPredictions}
                       disabled={running}
                       style={
                         running
-                          ? { background: "grey", color: "white", fontWeight: "bold", pointerEvents: "none" }
-                          : { background: "white", color: "#6c63ff", fontWeight: "bold" }
+                          ? {
+                              background: "grey",
+                              color: "white",
+                              fontWeight: "bold",
+                              pointerEvents: "none",
+                            }
+                          : {
+                              background: "white",
+                              color: "#6c63ff",
+                              fontWeight: "bold",
+                            }
                       }
                     >
                       {running ? "Ejecutando..." : "Ejecutar predicciones"}
@@ -430,7 +496,13 @@ export default function App() {
               </div>
 
               {results.length > 0 && progress === 100 && (
-                <div style={{ display: "flex", justifyContent: "center", marginTop: "14px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    marginTop: "14px",
+                  }}
+                >
                   <Button
                     type="button"
                     onClick={() => setResultsModalOpen(true)}
@@ -485,11 +557,24 @@ export default function App() {
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#111827" }}>
+                    <div
+                      style={{
+                        fontSize: "1.05rem",
+                        fontWeight: 800,
+                        color: "#111827",
+                      }}
+                    >
                       Columnas requeridas del archivo
                     </div>
-                    <div style={{ fontSize: "0.85rem", color: "#6b7280", marginTop: "4px" }}>
-                      Si alguna columna falta, se completará vacía para mantener la estructura.
+                    <div
+                      style={{
+                        fontSize: "0.85rem",
+                        color: "#6b7280",
+                        marginTop: "4px",
+                      }}
+                    >
+                      Si alguna columna falta, se completará vacía para mantener
+                      la estructura.
                     </div>
                   </div>
 
@@ -521,9 +606,22 @@ export default function App() {
                       background: "#fafafa",
                     }}
                   >
-                    <ol style={{ margin: 0, paddingLeft: "1.25rem", lineHeight: 1.55 }}>
+                    <ol
+                      style={{
+                        margin: 0,
+                        paddingLeft: "1.25rem",
+                        lineHeight: 1.55,
+                      }}
+                    >
                       {requiredFields.map((c) => (
-                        <li key={c} style={{ padding: "4px 0", color: "#111827", fontSize: "0.9rem" }}>
+                        <li
+                          key={c}
+                          style={{
+                            padding: "4px 0",
+                            color: "#111827",
+                            fontSize: "0.9rem",
+                          }}
+                        >
                           <code
                             style={{
                               fontSize: "0.82rem",
@@ -540,7 +638,13 @@ export default function App() {
                     </ol>
                   </div>
 
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "12px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      marginTop: "12px",
+                    }}
+                  >
                     <Button
                       style={{
                         backgroundColor: "rgb(108, 99, 255)",
@@ -596,10 +700,22 @@ export default function App() {
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: "1.05rem", fontWeight: 900, color: "#111827" }}>
+                    <div
+                      style={{
+                        fontSize: "1.05rem",
+                        fontWeight: 900,
+                        color: "#111827",
+                      }}
+                    >
                       Resultados
                     </div>
-                    <div style={{ fontSize: "0.85rem", color: "#6b7280", marginTop: "4px" }}>
+                    <div
+                      style={{
+                        fontSize: "0.85rem",
+                        color: "#6b7280",
+                        marginTop: "4px",
+                      }}
+                    >
                       Se muestra la predicción para las variables.
                     </div>
                   </div>
@@ -630,12 +746,27 @@ export default function App() {
                       gap: "12px",
                     }}
                   >
-                    <ResultCard title="Asiste a institución educativa" item={bestAsiste} />
-                    <ResultCard title="Causa por la que no asiste o no asistiría a institución educativa" item={bestCausa} />
-                    <ResultCard title="Nivel educativo alcanzado" item={bestNivel} />
+                    <ResultCard
+                      title="Asiste a institución educativa"
+                      item={bestAsiste}
+                    />
+                    <ResultCard
+                      title="Causa por la que no asiste o no asistiría a institución educativa"
+                      item={bestCausa}
+                    />
+                    <ResultCard
+                      title="Nivel educativo alcanzado"
+                      item={bestNivel}
+                    />
                   </div>
 
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "14px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      marginTop: "14px",
+                    }}
+                  >
                     <Button
                       style={{
                         backgroundColor: "rgb(108, 99, 255)",
@@ -650,8 +781,15 @@ export default function App() {
                     </Button>
                   </div>
 
-                  <div style={{ marginTop: "10px", color: "#6b7280", fontSize: "0.85rem" }}>
-                    Regla de color: <strong>&gt;= 80%</strong> verde, <strong>&lt;= 20%</strong> rojo, en otro caso naranja.
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      color: "#6b7280",
+                      fontSize: "0.85rem",
+                    }}
+                  >
+                    Regla de color: <strong>&gt;= 80%</strong> verde,{" "}
+                    <strong>&lt;= 20%</strong> rojo, en otro caso naranja.
                   </div>
                 </div>
               </div>
@@ -667,8 +805,8 @@ export default function App() {
             toast.type === "error"
               ? "bg-red-600"
               : toast.type === "success"
-              ? "bg-green-600"
-              : "bg-sky-600"
+                ? "bg-green-600"
+                : "bg-sky-600"
           }`}
         >
           {toast.text}
